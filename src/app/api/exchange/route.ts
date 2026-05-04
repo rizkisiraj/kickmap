@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request): Promise<NextResponse> {
   const ip = getClientIp(request);
-  const rl = await rateLimit(ip, 'rl:exchange', 500, 60);
+  const rl = await rateLimit(ip, 'rl:exchange', 30, 60);
   if (!rl.success) {
     return NextResponse.json(
       { error: 'Too many requests' },

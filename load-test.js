@@ -28,6 +28,9 @@ function get(url, params = {}) {
     headers: { 'X-Forwarded-For': vuIp(), ...(params.headers ?? {}) },
   });
   rateLimitedRate.add(res.status === 429);
+  if (res.status === 429) {
+    console.log(`429 from ${url} — body: ${res.body}`);
+  }
   return res;
 }
 

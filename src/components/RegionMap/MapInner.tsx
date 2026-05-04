@@ -57,6 +57,7 @@ function MapStyler({ regionData, onRegionClick, onRegionHover }: MapInnerProps) 
 
 function GeoJSONLayer({ regionData, onRegionClick, onRegionHover, geoData }: MapInnerProps & { geoData: GeoJsonObject }) {
   const layerRef = useRef<L.GeoJSON | null>(null);
+  const allLayersRef = useRef<L.Path[]>([]);
   const onRegionClickRef = useRef(onRegionClick);
   const onRegionHoverRef = useRef(onRegionHover);
 
@@ -92,14 +93,19 @@ function GeoJSONLayer({ regionData, onRegionClick, onRegionHover, geoData }: Map
     const regionId = getRegionIdForFeature(feature);
     if (!regionId) return;
 
+    const path = layer as L.Path;
+    allLayersRef.current.push(path);
+
     const label = REGION_LABELS[regionId] ?? regionId;
     const rd = getRegionDataForFeature(feature);
     const level = rd?.stockLevel ?? 'none';
     const glowColor = getColorForStockLevel(level);
 
     layer.on('mouseover', (e: LeafletMouseEvent) => {
-      const path = layer as L.Path;
       path.setStyle({ fillOpacity: 0.65, weight: 1.5, color: glowColor });
+      allLayersRef.current.forEach((other) => {
+        if (other !== path) other.setStyle({ fillOpacity: 0.08 });
+      });
       onRegionHoverRef.current({ id: regionId, label }, { x: e.originalEvent.clientX, y: e.originalEvent.clientY });
     });
 
@@ -108,8 +114,10 @@ function GeoJSONLayer({ regionData, onRegionClick, onRegionHover, geoData }: Map
     });
 
     layer.on('mouseout', () => {
-      const path = layer as L.Path;
       path.setStyle({ fillOpacity: 0.35, weight: 1, color: `${glowColor}99` });
+      allLayersRef.current.forEach((other) => {
+        if (other !== path) other.setStyle({ fillOpacity: 0.35 });
+      });
       onRegionHoverRef.current(null, null);
     });
 

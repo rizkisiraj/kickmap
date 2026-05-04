@@ -9,18 +9,34 @@ export const CACHE_TTL = {
   AUTOCOMPLETE: 5 * 60,      // 5min — partial model queries, prevent key pollution
 } as const;
 
+// Single-flight registry: prevents cache stampede by coalescing concurrent
+// requests for the same key into one MongoDB fetch instead of N identical ones.
+const inFlight = new Map<string, Promise<unknown>>();
+
 export const withCache = async <T>(
   key: string,
   ttlSeconds: number,
   fetchFn: () => Promise<T>,
 ): Promise<T> => {
   const cached = await redis.get(key);
-  // Check for null specifically — empty string '' could be a valid cached value
   if (cached !== null) {
     return JSON.parse(cached) as T;
   }
 
-  const fresh = await fetchFn();
-  await redis.setex(key, ttlSeconds, JSON.stringify(fresh));
-  return fresh;
+  const existing = inFlight.get(key);
+  if (existing) {
+    return existing as Promise<T>;
+  }
+
+  const promise = fetchFn()
+    .then((fresh) => {
+      void redis.setex(key, ttlSeconds, JSON.stringify(fresh));
+      return fresh;
+    })
+    .finally(() => {
+      inFlight.delete(key);
+    });
+
+  inFlight.set(key, promise);
+  return promise;
 };

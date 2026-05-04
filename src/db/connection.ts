@@ -24,8 +24,8 @@ export const connectDB = async (): Promise<typeof mongoose> => {
 
   if (!cached.promise) {
     cached.promise = mongoose.connect(env.MONGODB_URI, {
-      maxPoolSize: 10,
-      minPoolSize: 2,
+      maxPoolSize: 50,
+      minPoolSize: 5,
       maxIdleTimeMS: 60000,
       serverSelectionTimeoutMS: 5000,
       socketTimeoutMS: 30000,

@@ -10,7 +10,7 @@ const VALID_SORTS = new Set(['discount_desc', 'price_asc', 'recent']);
 
 export async function GET(request: Request): Promise<NextResponse> {
   const ip = getClientIp(request);
-  const rl = await rateLimit(ip, 'rl:deals', 500, 60);
+  const rl = await rateLimit(ip, 'rl:deals', 60, 60);
   if (!rl.success) {
     return NextResponse.json(
       { error: 'Too many requests' },
