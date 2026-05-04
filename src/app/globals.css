@@ -1,0 +1,124 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #0a0a0a;
+  --surface: #141414;
+  --surface2: #1a1a1a;
+  --border: #242424;
+  --border2: #2e2e2e;
+  --accent: #00ff87;
+  --accent-dim: rgba(0, 255, 135, 0.12);
+  --text: #f0f0f0;
+  --text2: #888;
+  --text3: #555;
+  --radius: 6px;
+  --font-head: 'Space Grotesk', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { background: var(--bg); color: var(--text); font-family: var(--font-head); }
+body { min-height: 100vh; background: var(--bg); }
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+::selection { background: var(--accent); color: var(--bg); }
+button { font-family: var(--font-head); cursor: pointer; border: none; outline: none; background: none; }
+input { font-family: var(--font-head); outline: none; }
+
+/* ============================================================
+   Responsive Layout Utilities
+   ============================================================ */
+
+/* Page wrapper padding: 16px mobile, 24px desktop */
+.page-wrap { padding: 0 16px 48px; }
+@media (min-width: 640px) { .page-wrap { padding: 0 24px 48px; } }
+
+/* Navbar */
+.navbar-header { padding: 0 16px; gap: 12px; }
+@media (min-width: 640px) { .navbar-header { padding: 0 24px; gap: 24px; } }
+
+.navbar-site-name { display: none; }
+@media (min-width: 480px) { .navbar-site-name { display: inline; } }
+
+.navbar-meta { display: none; }
+@media (min-width: 640px) { .navbar-meta { display: flex; } }
+
+/* NavLinks: scrollable on narrow screens so all links remain accessible */
+.navbar-links { overflow-x: auto; scrollbar-width: none; flex-shrink: 1; min-width: 0; }
+.navbar-links::-webkit-scrollbar { display: none; }
+
+/* Filter bar vertical dividers: hidden when bar wraps to multiple lines */
+.filter-divider { display: none; }
+@media (min-width: 600px) { .filter-divider { display: block; } }
+
+/* Homepage hero stats pill row: hidden on very small screens */
+.hero-stats { display: none; }
+@media (min-width: 480px) { .hero-stats { display: flex; } }
+
+/* RegionMap: column on mobile, row on desktop */
+.map-section { display: flex; flex-direction: column; gap: 16px; align-items: stretch; }
+@media (min-width: 768px) { .map-section { flex-direction: row; align-items: flex-start; } }
+
+/* Map sidebar: full-width vertical stack on mobile, 210px column on desktop */
+.map-sidebar { width: 100%; display: flex; flex-direction: column; gap: 8px; }
+@media (min-width: 768px) { .map-sidebar { width: 210px; flex-shrink: 0; } }
+
+/* Product detail: single column on mobile → two columns on desktop */
+.product-detail-grid { display: grid; grid-template-columns: 1fr; gap: 20px; align-items: flex-start; }
+@media (min-width: 768px) { .product-detail-grid { grid-template-columns: 1fr 1.4fr; gap: 32px; } }
+
+/* Sticky image panel: only sticky on desktop (on mobile it blocks scroll) */
+.product-image-sticky { position: static; }
+@media (min-width: 768px) { .product-image-sticky { position: sticky; top: 72px; } }
+
+/* SlidePanel: full-width on phones, 400px on larger screens */
+.slide-panel-inner { width: 100vw; }
+@media (min-width: 480px) { .slide-panel-inner { width: 400px; } }
+
+
+/* Brand heading: clamp so it doesn't overflow on narrow screens */
+.brand-heading { font-size: clamp(22px, 7vw, 40px) !important; }
+
+/* Size finder result grid: single col on mobile, auto-fill on wider */
+.size-finder-grid { display: grid; grid-template-columns: 1fr; gap: 8px; }
+@media (min-width: 480px) { .size-finder-grid { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); } }
+
+/* Deals price extras (SAVE text, original price): hidden on very narrow screens */
+.deal-price-extras { display: none; }
+@media (min-width: 420px) { .deal-price-extras { display: block; } }
+
+/* Deals grid: single column list on desktop, 2-column card grid on mobile */
+.deals-grid { display: flex; flex-direction: column; gap: 2px; }
+
+/* Inline price block inside content — hidden on desktop (price-col handles it) */
+.deal-price-inline { display: none; }
+/* Rank badge on image — hidden on desktop */
+.deal-rank-badge { display: none; }
+
+@media (max-width: 640px) {
+  .deals-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+  /* Flip card to column layout */
+  .deal-card { flex-direction: column !important; align-items: stretch !important; }
+
+  /* Hide the side rank column — badge on image takes over */
+  .deal-rank { display: none; }
+
+  /* Image fills full width, fixed height */
+  .deal-img { width: 100% !important; height: 140px !important; }
+
+  /* Show rank badge overlaid on image */
+  .deal-rank-badge { display: block; }
+
+  /* Content stacks below image */
+  .deal-content { padding: 8px 10px !important; }
+
+  /* Show inline price, hide the separate right-side price column */
+  .deal-price-inline { display: block; margin-bottom: 4px; }
+  .deal-price-col { display: none; }
+
+  /* Allow title to wrap in grid mode */
+  .deal-title { white-space: normal !important; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+}
