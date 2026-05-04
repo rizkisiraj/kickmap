@@ -8,7 +8,7 @@ interface CursorPaginationParams {
   limit: number;
 }
 
-function buildCacheKey(filters: ProductFilters): string {
+export function buildCacheKey(filters: ProductFilters): string {
   const entries = Object.entries(filters)
     .filter(([, v]) => v !== undefined && v !== null)
     .sort(([a], [b]) => a.localeCompare(b))

@@ -9,7 +9,7 @@ const VALID_REGIONS = new Set<string>(['MY', 'ID', 'SG']);
 
 export async function GET(request: Request): Promise<NextResponse> {
   const ip = getClientIp(request);
-  const rl = await rateLimit(ip, 'rl:products', 100, 60);
+  const rl = await rateLimit(ip, 'rl:products', 500, 60);
   if (!rl.success) {
     return NextResponse.json(
       { error: 'Too many requests' },
