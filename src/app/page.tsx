@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import type { Metadata } from 'next';
 import { heatmapService } from '@/services/heatmap.service';
 import { productService } from '@/services/product.service';
