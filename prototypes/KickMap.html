@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>KickMap — Find Your Size. Find the Best Price.</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="data.js"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="km-shared.jsx"></script>
+<script type="text/babel" src="km-home.jsx"></script>
+<script type="text/babel" src="km-pages-1.jsx"></script>
+<script type="text/babel" src="km-pages-2.jsx"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0a0a0a;
+  --surface: #141414;
+  --surface2: #1a1a1a;
+  --border: #242424;
+  --border2: #2e2e2e;
+  --accent: #00ff87;
+  --accent-dim: rgba(0,255,135,0.12);
+  --text: #f0f0f0;
+  --text2: #888;
+  --text3: #555;
+  --radius: 6px;
+  --font-head: 'Space Grotesk', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+html { background: var(--bg); color: var(--text); font-family: var(--font-head); }
+body { min-height: 100vh; background: var(--bg); }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+::selection { background: var(--accent); color: var(--bg); }
+button { font-family: var(--font-head); cursor: pointer; border: none; outline: none; background: none; }
+input { font-family: var(--font-head); outline: none; }
+a { color: inherit; text-decoration: none; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect, useCallback } = React;
+
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "accent": "#00ff87",
+  "accentLabel": "Green",
+  "showSaleBadges": true
+}/*EDITMODE-END*/;
+
+function KickMapTweaks() {
+  const [tweaks, setTweak] = useTweaks(TWEAK_DEFAULTS);
+
+  useEffect(() => {
+    document.documentElement.style.setProperty("--accent", tweaks.accent);
+    const rgbMap = { "#00ff87": "0,255,135", "#ff5c00": "255,92,0", "#a78bfa": "167,139,250" };
+    const rgb = rgbMap[tweaks.accent] || "0,255,135";
+    document.documentElement.style.setProperty("--accent-dim", "rgba(" + rgb + ",0.12)");
+  }, [tweaks.accent]);
+
+  return (
+    <TweaksPanel title="KickMap">
+      <TweakSection label="Accent Color">
+        <TweakRadio
+          id="accentLabel"
+          value={tweaks.accentLabel}
+          onChange={v => {
+            const map = { "Green": "#00ff87", "Orange": "#ff5c00", "Purple": "#a78bfa" };
+            setTweak({ accentLabel: v, accent: map[v] || "#00ff87" });
+          }}
+          options={[
+            { label: "Green", value: "Green" },
+            { label: "Orange", value: "Orange" },
+            { label: "Purple", value: "Purple" },
+          ]}
+        />
+      </TweakSection>
+      <TweakSection label="Sale Badges">
+        <TweakToggle id="showSaleBadges" label="Show sale badges on cards" value={tweaks.showSaleBadges} onChange={v => setTweak("showSaleBadges", v)} />
+      </TweakSection>
+    </TweaksPanel>
+  );
+}
+
+function App() {
+  const [page, setPage] = useState(() => {
+    const hash = window.location.hash.replace("#", "");
+    return hash || "/";
+  });
+
+  useEffect(() => {
+    const onHash = () => {
+      const hash = window.location.hash.replace("#", "");
+      setPage(hash || "/");
+    };
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+
+  const navigate = useCallback((path) => {
+    window.location.hash = path;
+    setPage(path);
+    window.scrollTo({ top: 0, behavior: "instant" });
+  }, []);
+
+  const renderPage = () => {
+    if (page === "/" || page === "") return <HomePage onNavigate={navigate} />;
+    if (page === "/deals") return <DealsPage onNavigate={navigate} />;
+    if (page === "/compare") return <ComparePage />;
+    if (page === "/size-finder") return <SizeFinderPage onNavigate={navigate} />;
+    if (page.startsWith("/brand/")) {
+      const brand = decodeURIComponent(page.replace("/brand/", ""));
+      return <BrandPage brand={brand} onNavigate={navigate} />;
+    }
+    if (page.startsWith("/product/")) {
+      const id = page.replace("/product/", "");
+      return <ProductDetailPage productId={id} onNavigate={navigate} />;
+    }
+    return <HomePage onNavigate={navigate} />;
+  };
+
+  return (
+    <div>
+      <Navbar currentPage={page} onNavigate={navigate} />
+      <main style={{ maxWidth: 1280, margin: "0 auto" }}>
+        {renderPage()}
+      </main>
+      <KickMapTweaks />
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
