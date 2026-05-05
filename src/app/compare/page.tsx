@@ -8,6 +8,8 @@ export const metadata: Metadata = {
   description: 'Compare sneaker prices across MY, ID, SG.',
 };
 
+export const dynamic = 'force-dynamic';
+
 export default async function ComparePage() {
   const result = await productService.getProducts(
     { multiRegion: true },
