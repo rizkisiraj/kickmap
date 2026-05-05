@@ -45,9 +45,7 @@ function MapStyler({ regionData, onRegionClick, onRegionHover }: MapInnerProps) 
 
   useEffect(() => {
     if (!map || !map.zoomControl) return;
-    // Remove zoom controls for clean look
     map.zoomControl.remove();
-    // Dark background on map container
     const container = map.getContainer();
     container.style.background = '#0d1117';
   }, [map]);
@@ -89,6 +87,11 @@ function GeoJSONLayer({ regionData, onRegionClick, onRegionHover, geoData }: Map
     };
   };
 
+  // Leaflet sets fill/fill-opacity via setAttribute (SVG attributes), not CSS properties,
+  // so CSS transitions don't apply. We must get the DOM element and set el.style directly.
+  const getEl = (p: L.Path): SVGPathElement | null =>
+    (p as unknown as { getElement?: () => SVGPathElement | null }).getElement?.() ?? null;
+
   const onEachFeature = (feature: Feature, layer: Layer) => {
     const regionId = getRegionIdForFeature(feature);
     if (!regionId) return;
@@ -101,10 +104,28 @@ function GeoJSONLayer({ regionData, onRegionClick, onRegionHover, geoData }: Map
     const level = rd?.stockLevel ?? 'none';
     const glowColor = getColorForStockLevel(level);
 
+    // Wire up CSS transitions once the layer is in the DOM
+    layer.on('add', () => {
+      const el = getEl(path);
+      if (el) {
+        el.style.transition = 'fill-opacity 0.25s ease, fill 0.25s ease, filter 0.25s ease, stroke-width 0.25s ease';
+      }
+    });
+
     layer.on('mouseover', (e: LeafletMouseEvent) => {
-      path.setStyle({ fillOpacity: 0.65, weight: 1.5, color: glowColor });
+      const el = getEl(path);
+      if (el) {
+        el.style.fill = glowColor;
+        el.style.fillOpacity = '0.88';
+        el.style.filter = `drop-shadow(0 0 8px ${glowColor}99)`;
+      }
+      path.setStyle({ weight: 2.5, color: glowColor });
+
       allLayersRef.current.forEach((other) => {
-        if (other !== path) other.setStyle({ fillOpacity: 0.08 });
+        if (other !== path) {
+          const otherEl = getEl(other);
+          if (otherEl) otherEl.style.fillOpacity = '0.06';
+        }
       });
       onRegionHoverRef.current({ id: regionId, label }, { x: e.originalEvent.clientX, y: e.originalEvent.clientY });
     });
@@ -114,9 +135,19 @@ function GeoJSONLayer({ regionData, onRegionClick, onRegionHover, geoData }: Map
     });
 
     layer.on('mouseout', () => {
-      path.setStyle({ fillOpacity: 0.35, weight: 1, color: `${glowColor}99` });
+      const el = getEl(path);
+      if (el) {
+        el.style.fill = glowColor;
+        el.style.fillOpacity = '0.35';
+        el.style.filter = '';
+      }
+      path.setStyle({ weight: 1, color: `${glowColor}99` });
+
       allLayersRef.current.forEach((other) => {
-        if (other !== path) other.setStyle({ fillOpacity: 0.35 });
+        if (other !== path) {
+          const otherEl = getEl(other);
+          if (otherEl) otherEl.style.fillOpacity = '0.35';
+        }
       });
       onRegionHoverRef.current(null, null);
     });
@@ -161,6 +192,7 @@ export default function MapInner({ regionData, onRegionClick, onRegionHover }: M
         <MapStyler regionData={regionData} onRegionClick={onRegionClick} onRegionHover={onRegionHover} />
         {geoData !== null && (
           <GeoJSONLayer
+            key={regionData.map((r) => `${r.region}:${r.stockLevel}`).join(',')}
             geoData={geoData}
             regionData={regionData}
             onRegionClick={onRegionClick}

@@ -38,7 +38,7 @@ export function MapTooltip({
         left: pos.x + 16,
         top: pos.y - 10,
         pointerEvents: 'none',
-        zIndex: 200,
+        zIndex: 9999,
         background: 'rgba(14,14,14,0.97)',
         border: `1px solid ${glowColor}55`,
         borderRadius: '8px',

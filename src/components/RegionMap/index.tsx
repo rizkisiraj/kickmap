@@ -153,7 +153,7 @@ export function RegionMap({ regionData, hasActiveFilters, filters }: RegionMapPr
           region={tooltip.region}
           pos={tooltip.pos}
           stats={{
-            total: tooltipRegionData.totalProducts,
+            total: tooltipRegionData.matchedCount ?? tooltipRegionData.inStockCount,
             onSale: tooltipRegionData.onSaleCount,
             topBrand: tooltipRegionData.topBrands[0] ?? '—',
           }}

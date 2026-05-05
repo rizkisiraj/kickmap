@@ -65,7 +65,7 @@ export function HomepageClient({ initialRegionData, allProducts, brands, topDeal
         p.stock.some((s) => s.region === rd.region && s.inStock),
       ).length;
       const onSaleCount = displayProducts.filter((p) =>
-        p.stock.some((s) => s.region === rd.region && s.isOnSale),
+        p.stock.some((s) => s.region === rd.region && s.isOnSale && s.inStock),
       ).length;
       const stockLevel: StockLevel =
         matched > 200 ? 'high' : matched > 60 ? 'medium' : matched > 0 ? 'low' : 'none';
