@@ -31,14 +31,19 @@ function formatPrice(amount: number, currency: Currency): string {
 interface CompareClientProps {
   products: Product[];
   total: number;
+  initialQuery?: string;
 }
 
-export function CompareClient({ products, total }: CompareClientProps) {
+export function CompareClient({ products, total, initialQuery = '' }: CompareClientProps) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
-  const [inputValue, setInputValue] = useState('');
+  const [inputValue, setInputValue] = useState(initialQuery);
   const [visibleCount, setVisibleCount] = useState(30);
+
+  useEffect(() => {
+    setInputValue(initialQuery);
+  }, [initialQuery]);
 
   const currency = (searchParams.get('currency') as Currency) ?? 'SGD';
   const sort = searchParams.get('sort') ?? 'NAME';
@@ -80,6 +85,22 @@ export function CompareClient({ products, total }: CompareClientProps) {
   }, [filtered, sort]);
 
   useEffect(() => { setVisibleCount(30); }, [sort, currency]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const current = searchParams.get('q') ?? '';
+      if (inputValue.trim() !== current) {
+        const params = new URLSearchParams(searchParams.toString());
+        if (inputValue.trim()) {
+          params.set('q', inputValue.trim());
+        } else {
+          params.delete('q');
+        }
+        router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [inputValue, router, pathname, searchParams]);
 
   const visibleRows = sorted.slice(0, visibleCount);
 

@@ -10,10 +10,18 @@ export const metadata: Metadata = {
 
 export const dynamic = 'force-dynamic';
 
-export default async function ComparePage() {
+export default async function ComparePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string }>;
+}) {
+  const params = await searchParams;
+  const q = params.q;
+  const isSearching = q !== undefined && q.trim().length >= 2;
+
   const result = await productService.getProducts(
-    { multiRegion: true },
-    { limit: 200 },
+    { multiRegion: true, ...(isSearching ? { q: q.trim() } : {}) },
+    { limit: isSearching ? 10000 : 500 },
   );
 
   const products = result.success ? result.data.data : [];
@@ -33,6 +41,7 @@ export default async function ComparePage() {
         <CompareClient
           products={products}
           total={total}
+          initialQuery={isSearching ? q.trim() : ''}
         />
       </Suspense>
     </div>
