@@ -48,9 +48,12 @@ export const productService = {
   ): Promise<Result<PaginatedResponse<Product>>> {
     const cacheKey = buildCacheKey(filters);
     const ttl = (filters.model !== undefined || filters.q !== undefined) ? CACHE_TTL.AUTOCOMPLETE : CACHE_TTL.PRODUCTS;
-    const allProducts = await withCache(cacheKey, ttl, () =>
-      productRepository.findMany(filters),
-    );
+
+    // Skip cache for free-text q queries to prevent Redis key explosion
+    // Text index (Phase 2) makes these fast enough without caching
+    const allProducts = filters.q !== undefined
+      ? await productRepository.findMany(filters)
+      : await withCache(cacheKey, ttl, () => productRepository.findMany(filters));
 
     const { cursor, limit } = pagination;
     const total = allProducts.length;

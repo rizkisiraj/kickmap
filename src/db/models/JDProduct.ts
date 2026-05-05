@@ -19,6 +19,9 @@ const JDProductSchema = new Schema(
 // Compound index for brand page queries (vendor filter + stable productCode sort)
 JDProductSchema.index({ vendor: 1, productCode: 1 });
 
+// Text index for search queries across title, vendor, and colorway
+JDProductSchema.index({ title: 'text', vendor: 'text', colorway: 'text' });
+
 export type JDProductDocument = InferSchemaType<typeof JDProductSchema>;
 
 export const JDProductModel =

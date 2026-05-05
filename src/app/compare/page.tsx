@@ -8,16 +8,9 @@ export const metadata: Metadata = {
   description: 'Compare sneaker prices across MY, ID, SG.',
 };
 
-interface ComparePageProps {
-  searchParams: Promise<{ q?: string }>;
-}
-
-export default async function ComparePage({ searchParams }: ComparePageProps) {
-  const { q } = await searchParams;
-  const trimmedQ = q && q.trim().length >= 2 ? q.trim() : undefined;
-
+export default async function ComparePage() {
   const result = await productService.getProducts(
-    { multiRegion: true, ...(trimmedQ !== undefined ? { q: trimmedQ } : {}) },
+    { multiRegion: true },
     { limit: 200 },
   );
 
@@ -38,7 +31,6 @@ export default async function ComparePage({ searchParams }: ComparePageProps) {
         <CompareClient
           products={products}
           total={total}
-          initialQ={q ?? ''}
         />
       </Suspense>
     </div>

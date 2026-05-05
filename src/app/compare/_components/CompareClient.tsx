@@ -17,7 +17,6 @@ const CURRENCY_SYMBOL: Record<Currency, string> = {
   MYR: 'RM', IDR: 'Rp', SGD: 'S$', USD: 'US$',
 };
 
-// Approximate SGD conversion for best-deal column
 const TO_SGD: Record<Currency, number> = { SGD: 1, MYR: 0.29, IDR: 0.000086, USD: 1.35 };
 
 function toSGD(amount: number, currency: Currency): number {
@@ -32,43 +31,30 @@ function formatPrice(amount: number, currency: Currency): string {
 interface CompareClientProps {
   products: Product[];
   total: number;
-  initialQ: string;
 }
 
-export function CompareClient({ products, total, initialQ }: CompareClientProps) {
+export function CompareClient({ products, total }: CompareClientProps) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
-  const [inputValue, setInputValue] = useState(initialQ);
+  const [inputValue, setInputValue] = useState('');
   const [visibleCount, setVisibleCount] = useState(30);
-
-  // Sync input when navigating back/forward via URL (back button, direct URL change)
-  // Does NOT run during normal typing because initialQ only updates after the debounce fires
-  // which sets it to the same value the user already typed — a no-op state update.
-  useEffect(() => {
-    setInputValue(initialQ);
-  }, [initialQ]);
 
   const currency = (searchParams.get('currency') as Currency) ?? 'SGD';
   const sort = searchParams.get('sort') ?? 'NAME';
 
-  // Debounced server re-render via URL param
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      const params = new URLSearchParams(searchParams.toString());
-      if (inputValue.trim().length >= 2) {
-        params.set('q', inputValue.trim());
-      } else {
-        params.delete('q');
-      }
-      router.replace(`${pathname}?${params.toString()}`);
-    }, 400);
-    return () => clearTimeout(timer);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inputValue]);
+  const filtered = useMemo(() => {
+    if (!inputValue.trim() || inputValue.trim().length < 2) return products;
+    const q = inputValue.trim().toLowerCase();
+    return products.filter((p) =>
+      p.title.toLowerCase().includes(q) ||
+      p.vendor.toLowerCase().includes(q) ||
+      (p.colorway?.toLowerCase().includes(q) ?? false)
+    );
+  }, [products, inputValue]);
 
   const sorted = useMemo(() => {
-    let list = [...products];
+    let list = [...filtered];
     if (sort === 'PRICE') {
       list.sort((a, b) => {
         const aMin = Math.min(...a.stock.filter((s) => s.inStock).map((s) => toSGD(s.price, s.currency)));
@@ -91,7 +77,7 @@ export function CompareClient({ products, total, initialQ }: CompareClientProps)
       list.sort((a, b) => a.title.localeCompare(b.title));
     }
     return list;
-  }, [products, sort]);
+  }, [filtered, sort]);
 
   useEffect(() => { setVisibleCount(30); }, [sort, currency]);
 
@@ -231,7 +217,7 @@ export function CompareClient({ products, total, initialQ }: CompareClientProps)
             onClick={() => setVisibleCount((v) => v + 30)}
             style={{ padding: '10px 24px', fontSize: '11px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', background: 'var(--surface)', color: 'var(--text2)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', cursor: 'pointer' }}
           >
-            LOAD MORE  (showing {Math.min(visibleCount, sorted.length)} of {total})
+            LOAD MORE  (showing {Math.min(visibleCount, sorted.length)} of {sorted.length})
           </button>
         </div>
       )}

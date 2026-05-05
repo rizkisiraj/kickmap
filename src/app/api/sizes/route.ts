@@ -7,8 +7,8 @@ async function fetchAvailableSizes(): Promise<string[]> {
   await connectDB();
   const result = await JDRegionStockModel.aggregate<{ sizes: string[] }>([
     { $match: { inStock: true } },
-    { $unwind: '$sizesTotal' },
-    { $group: { _id: null, sizes: { $addToSet: '$sizesTotal' } } },
+    { $unwind: '$sizesAvailable' },
+    { $group: { _id: null, sizes: { $addToSet: '$sizesAvailable' } } },
   ]);
   return result[0]?.sizes ?? [];
 }

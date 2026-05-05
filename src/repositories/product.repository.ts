@@ -39,9 +39,9 @@ export const productRepository = {
     if (filters.region !== undefined) stockMatch['region'] = filters.region;
     if (filters.inStock !== undefined) stockMatch['inStock'] = filters.inStock;
     if (filters.onSaleOnly === true) stockMatch['isOnSale'] = true;
-    if (filters.size !== undefined) stockMatch['sizesTotal'] = filters.size;
+    if (filters.size !== undefined) stockMatch['sizesAvailable'] = filters.size;
 
-    // Build product filter stage
+    // Build non-search product filter stage (vendor, gender, model)
     const productMatch: Record<string, unknown> = {};
     if (filters.vendor !== undefined) {
       productMatch['vendor'] = { $regex: new RegExp(filters.vendor, 'i') };
@@ -54,10 +54,6 @@ export const productRepository = {
         { title: { $regex: new RegExp(filters.model, 'i') } },
         { colorway: { $regex: new RegExp(filters.model, 'i') } },
       ];
-    }
-    if (filters.q !== undefined && filters.q.trim().length >= 2) {
-      const qRegex = { $regex: new RegExp(filters.q.trim(), 'i') };
-      productMatch['$or'] = [{ title: qRegex }, { vendor: qRegex }, { colorway: qRegex }];
     }
 
     interface AggResult {
@@ -82,69 +78,92 @@ export const productRepository = {
       }[];
     }
 
-    const pipeline: PipelineStage[] = [
-      // Start from products, optionally filter by product fields first
-      ...(Object.keys(productMatch).length > 0 ? [{ $match: productMatch }] : []),
-      // Join stock in one round trip
-      {
-        $lookup: {
-          from: 'jdregionstocks',
-          localField: 'productCode',
-          foreignField: 'productCode',
-          as: 'stock',
+    function buildPipeline(firstMatch: Record<string, unknown>): PipelineStage[] {
+      return [
+        { $match: firstMatch },
+        ...(Object.keys(productMatch).length > 0 ? [{ $match: productMatch }] : []),
+        {
+          $lookup: {
+            from: 'jdregionstocks',
+            localField: 'productCode',
+            foreignField: 'productCode',
+            as: 'stock',
+          },
         },
-      },
-      // Filter by stock conditions
-      ...(Object.keys(stockMatch).length > 0
-        ? [{ $match: { stock: { $elemMatch: stockMatch } } }]
-        : []),
-      // Keep only matching stock entries (e.g. only SG stocks when region=SG)
-      ...(Object.keys(stockMatch).length > 0
-        ? [{
-            $set: {
-              stock: {
-                $filter: {
-                  input: '$stock',
-                  as: 's',
-                  cond: {
-                    $and: Object.entries(stockMatch).map(([k, v]) =>
-                      // sizesTotal/sizesAvailable are arrays — use $in instead of $eq
-                      k === 'sizesTotal' || k === 'sizesAvailable'
-                        ? { $in: [v, `$$s.${k}`] }
-                        : { $eq: [`$$s.${k}`, v] }
-                    ),
+        ...(Object.keys(stockMatch).length > 0
+          ? [{ $match: { stock: { $elemMatch: stockMatch } } }]
+          : []),
+        ...(Object.keys(stockMatch).length > 0
+          ? [{
+              $set: {
+                stock: {
+                  $filter: {
+                    input: '$stock',
+                    as: 's',
+                    cond: {
+                      $and: Object.entries(stockMatch).map(([k, v]) =>
+                        k === 'sizesTotal' || k === 'sizesAvailable'
+                          ? { $in: [v, `$$s.${k}`] }
+                          : { $eq: [`$$s.${k}`, v] }
+                      ),
+                    },
                   },
                 },
               },
-            },
-          }]
-        : []),
-      // Require at least one matching stock entry
-      { $match: { 'stock.0': { $exists: true } } },
-      // multiRegion: keep only products available in 2+ regions
-      ...(filters.multiRegion === true
-        ? [{ $match: { $expr: { $gte: [{ $size: { $setUnion: '$stock.region' } }, 2] } } }]
-        : []),
-      { $sort: { productCode: 1 } },
-    ];
+            }]
+          : []),
+        { $match: { 'stock.0': { $exists: true } } },
+        ...(filters.multiRegion === true
+          ? [{ $match: { $expr: { $gte: [{ $size: { $setUnion: '$stock.region' } }, 2] } } }]
+          : []),
+        { $sort: { productCode: 1 } },
+      ];
+    }
 
-    const results = await JDProductModel.aggregate<AggResult>(pipeline);
+    function mapResults(results: AggResult[]): Product[] {
+      return results.map((p) => {
+        const product: Product = {
+          productCode: p.productCode,
+          title: p.title,
+          vendor: p.vendor,
+          imageUrl: p.imageUrl,
+          gender: p.gender,
+          productType: p.productType,
+          stock: p.stock.map(mapStockDoc),
+        };
+        if (p.colorway !== undefined && p.colorway !== null) {
+          product.colorway = p.colorway;
+        }
+        return product;
+      });
+    }
 
-    return results.map((p) => {
-      const product: Product = {
-        productCode: p.productCode,
-        title: p.title,
-        vendor: p.vendor,
-        imageUrl: p.imageUrl,
-        gender: p.gender,
-        productType: p.productType,
-        stock: p.stock.map(mapStockDoc),
-      };
-      if (p.colorway !== undefined && p.colorway !== null) {
-        product.colorway = p.colorway;
+    // Hybrid search: $text first (indexed), $regex fallback (catches partials)
+    if (filters.q !== undefined && filters.q.trim().length >= 2) {
+      const trimmedQ = filters.q.trim();
+
+      // Stage 1: $text search (uses text index)
+      const textPipeline = buildPipeline({ $text: { $search: trimmedQ } });
+      const textResults = await JDProductModel.aggregate<AggResult>(textPipeline);
+
+      if (textResults.length > 0) {
+        return mapResults(textResults);
       }
-      return product;
-    });
+
+      // Stage 2: $regex fallback for partial matches
+      const qRegex = { $regex: new RegExp(trimmedQ, 'i') };
+      const regexPipeline = buildPipeline({
+        $or: [{ title: qRegex }, { vendor: qRegex }, { colorway: qRegex }],
+      });
+      const regexResults = await JDProductModel.aggregate<AggResult>(regexPipeline);
+      return mapResults(regexResults);
+    }
+
+    // No search query — standard pipeline
+    const firstMatch = Object.keys(productMatch).length > 0 ? productMatch : {};
+    const pipeline = buildPipeline(firstMatch);
+    const results = await JDProductModel.aggregate<AggResult>(pipeline);
+    return mapResults(results);
   },
 
   async findByCode(code: string): Promise<Product | null> {
