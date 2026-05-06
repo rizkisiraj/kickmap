@@ -1,5 +1,8 @@
 import mongoose from 'mongoose';
 import { env } from '@/env';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('mongodb');
 
 interface MongooseCache {
   conn: typeof mongoose | null;
@@ -17,12 +20,21 @@ if (!globalWithMongoose.mongooseCache) {
   globalWithMongoose.mongooseCache = cached;
 }
 
+mongoose.connection.on('connected', () => {
+  log.info('MongoDB connected');
+});
+
+mongoose.connection.on('disconnected', () => log.warn('MongoDB disconnected'));
+mongoose.connection.on('reconnected', () => log.info('MongoDB reconnected'));
+mongoose.connection.on('error', (err) => log.error({ err: err.message }, 'MongoDB connection error'));
+
 export const connectDB = async (): Promise<typeof mongoose> => {
   if (cached.conn) {
     return cached.conn;
   }
 
   if (!cached.promise) {
+    log.info('Initializing MongoDB connection...');
     cached.promise = mongoose.connect(env.MONGODB_URI, {
       maxPoolSize: 50,
       minPoolSize: 5,

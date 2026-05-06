@@ -1,6 +1,9 @@
 import type { RegionMapData, StockLevel } from '@/types';
 import { connectDB } from '@/db/connection';
 import { JDRegionStockModel } from '@/db/models/JDRegionStock';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('repo:heatmap');
 
 const ALL_REGIONS: Array<'MY' | 'ID' | 'SG'> = ['MY', 'ID', 'SG'];
 
@@ -31,6 +34,8 @@ interface VendorGroupedResult {
 export const heatmapRepository = {
   async getRegionStats(): Promise<RegionMapData[]> {
     await connectDB();
+
+    const startTime = Date.now();
 
     // Query 1: stock stats grouped by region (no productCodes array)
     const stockAgg = await JDRegionStockModel.aggregate<StockAggResult>([
@@ -85,9 +90,9 @@ export const heatmapRepository = {
     const regionMap = new Map(stockAgg.map((r) => [r._id, r]));
     const vendorMap = new Map(vendorAgg.map((r) => [r._id, r.topBrands.slice(0, 3)]));
 
-    return ALL_REGIONS.map((region) => {
-      const data = regionMap.get(region);
-      if (data === undefined) {
+    const data = ALL_REGIONS.map((region) => {
+      const stats = regionMap.get(region);
+      if (stats === undefined) {
         return {
           region,
           totalProducts: 0,
@@ -100,12 +105,21 @@ export const heatmapRepository = {
 
       return {
         region,
-        totalProducts: data.totalProducts,
-        inStockCount: data.inStockCount,
-        onSaleCount: data.onSaleCount,
-        stockLevel: deriveStockLevel(data.inStockCount),
+        totalProducts: stats.totalProducts,
+        inStockCount: stats.inStockCount,
+        onSaleCount: stats.onSaleCount,
+        stockLevel: deriveStockLevel(stats.inStockCount),
         topBrands: vendorMap.get(region) ?? [],
       };
     });
+
+    const duration = Date.now() - startTime;
+    if (duration > 100) {
+      log.warn({ duration }, 'Slow heatmap query');
+    } else {
+      log.debug({ duration }, 'Heatmap query completed');
+    }
+
+    return data;
   },
 };

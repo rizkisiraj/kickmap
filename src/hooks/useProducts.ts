@@ -28,6 +28,9 @@ export function useProducts(filters: ProductFilters = {}) {
     keepPreviousData: true,
     revalidateOnFocus: false,
     dedupingInterval: 5 * 60 * 1000,
+    onError: (err) => {
+      console.error('[useProducts] SWR error:', err.message, 'url:', url);
+    },
   });
 
   return {

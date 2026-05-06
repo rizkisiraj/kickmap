@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { connectDB } from '@/db/connection';
 import { redis } from '@/lib/redis';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('api:health');
 
 export const dynamic = 'force-dynamic';
 
@@ -18,8 +21,10 @@ export async function GET(): Promise<NextResponse> {
     status = 'ok';
   } else if (mongodb === 'down' && redisStatus === 'down') {
     status = 'down';
+    log.error({ mongodb, redis: redisStatus }, 'Health check: all services down');
   } else {
     status = 'degraded';
+    log.warn({ mongodb, redis: redisStatus }, 'Health check: degraded');
   }
 
   return NextResponse.json(

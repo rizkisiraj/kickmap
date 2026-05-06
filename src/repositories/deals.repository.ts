@@ -1,6 +1,9 @@
 import type { Deal } from '@/types';
 import { connectDB } from '@/db/connection';
 import { JDRegionStockModel } from '@/db/models/JDRegionStock';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('repo:deals');
 
 interface StockAggResult {
   productCode: string;
@@ -24,6 +27,7 @@ export const dealsRepository = {
   async findOnSale(): Promise<Deal[]> {
     await connectDB();
 
+    const startTime = Date.now();
     const results = await JDRegionStockModel.aggregate<StockAggResult>([
       { $match: { isOnSale: true, inStock: true } },
       {
@@ -54,7 +58,7 @@ export const dealsRepository = {
       { $sort: { discountPercent: -1, productCode: 1, region: 1 } },
     ]);
 
-    return results.map((r) => {
+    const deals = results.map((r) => {
       const productData = r.product;
       return {
         productCode: r.productCode,
@@ -71,5 +75,14 @@ export const dealsRepository = {
         scrapedAt: r.scrapedAt instanceof Date ? r.scrapedAt.toISOString() : String(r.scrapedAt),
       };
     });
+
+    const duration = Date.now() - startTime;
+    if (duration > 100) {
+      log.warn({ duration, resultCount: deals.length }, 'Slow deals query');
+    } else {
+      log.debug({ duration, resultCount: deals.length }, 'Deals query completed');
+    }
+
+    return deals;
   },
 };

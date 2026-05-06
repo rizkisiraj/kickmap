@@ -15,6 +15,9 @@ export function useExchangeRates() {
     keepPreviousData: true,
     revalidateOnFocus: false,
     refreshInterval: 60 * 60 * 1000,
+    onError: (err) => {
+      console.error('[useExchangeRates] SWR error:', err.message);
+    },
   });
 
   return {

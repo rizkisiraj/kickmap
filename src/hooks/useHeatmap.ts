@@ -18,6 +18,9 @@ export function useHeatmap() {
       keepPreviousData: true,
       revalidateOnFocus: false,
       dedupingInterval: 5 * 60 * 1000,
+      onError: (err) => {
+        console.error('[useHeatmap] SWR error:', err.message);
+      },
     },
   );
 
