@@ -18,8 +18,14 @@ async function fetchAvailableSizes(): Promise<string[]> {
 
 export const GET = async (): Promise<NextResponse> => {
   const startTime = Date.now();
-  const sizes = await withCache('products:sizes', CACHE_TTL.PRODUCTS, fetchAvailableSizes);
-  const duration = Date.now() - startTime;
-  log.debug({ duration, sizeCount: sizes.length }, 'Sizes request completed');
-  return NextResponse.json(sizes);
+  try {
+    const sizes = await withCache('products:sizes', CACHE_TTL.PRODUCTS, fetchAvailableSizes);
+    const duration = Date.now() - startTime;
+    log.info({ duration, sizeCount: sizes.length }, 'Sizes request completed');
+    return NextResponse.json(sizes);
+  } catch (err) {
+    const duration = Date.now() - startTime;
+    log.error({ duration, error: err instanceof Error ? err.message : String(err) }, 'Sizes API error');
+    return NextResponse.json({ error: 'Failed to fetch sizes' }, { status: 500 });
+  }
 };

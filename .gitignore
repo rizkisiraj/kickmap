@@ -55,3 +55,8 @@ TESTING.md
 AGENTS.md
 CLAUDE.md
 
+grafana-kickmap.json
+grafana.json
+Logs-2026-*.json
+TEST_RESULT.md
+test-summary.md

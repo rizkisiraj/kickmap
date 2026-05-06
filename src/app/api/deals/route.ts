@@ -27,11 +27,13 @@ export async function GET(request: Request): Promise<NextResponse> {
 
   const regionParam = url.searchParams.get('region');
   if (regionParam !== null && !VALID_REGIONS.has(regionParam)) {
+    log.warn({ ip, region: regionParam }, 'Invalid region param');
     return NextResponse.json({ error: 'Invalid region' }, { status: 400 });
   }
 
   const sortParam = url.searchParams.get('sort');
   if (sortParam !== null && !VALID_SORTS.has(sortParam)) {
+    log.warn({ ip, sort: sortParam }, 'Invalid sort param');
     return NextResponse.json({ error: 'Invalid sort value' }, { status: 400 });
   }
 
