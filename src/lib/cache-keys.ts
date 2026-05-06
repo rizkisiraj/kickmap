@@ -10,4 +10,5 @@ export const CACHE_KEYS = {
   heatmap: () => 'heatmap:regions',
   exchangeRates: () => 'exchange:rates',
   exchangeRatesStale: () => 'exchange:rates:stale',
+  searchQuery: (q: string) => `products:search:${q.toLowerCase().trim()}`,
 } as const;

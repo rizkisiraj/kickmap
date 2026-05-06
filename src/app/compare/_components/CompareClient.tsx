@@ -86,21 +86,16 @@ export function CompareClient({ products, total, initialQuery = '' }: CompareCli
 
   useEffect(() => { setVisibleCount(30); }, [sort, currency]);
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      const current = searchParams.get('q') ?? '';
-      if (inputValue.trim() !== current) {
-        const params = new URLSearchParams(searchParams.toString());
-        if (inputValue.trim()) {
-          params.set('q', inputValue.trim());
-        } else {
-          params.delete('q');
-        }
-        router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-      }
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [inputValue, router, pathname, searchParams]);
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const params = new URLSearchParams(searchParams.toString());
+    if (inputValue.trim()) {
+      params.set('q', inputValue.trim());
+    } else {
+      params.delete('q');
+    }
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  };
 
   const visibleRows = sorted.slice(0, visibleCount);
 
@@ -112,13 +107,21 @@ export function CompareClient({ products, total, initialQuery = '' }: CompareCli
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
         <CurrencyToggle />
         <SortControl />
-        <input
-          type="text"
-          placeholder="⌕ Search by name or brand..."
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
-          style={{ flex: 1, minWidth: '160px', padding: '7px 12px', fontSize: '12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', outline: 'none' }}
-        />
+        <form onSubmit={handleSubmit} style={{ flex: 1, minWidth: '160px', display: 'flex', gap: '8px' }}>
+          <input
+            type="text"
+            placeholder="⌕ Search by name or brand..."
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            style={{ flex: 1, padding: '7px 12px', fontSize: '12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', outline: 'none' }}
+          />
+          <button
+            type="submit"
+            style={{ padding: '7px 16px', fontSize: '12px', fontWeight: 600, background: 'var(--accent)', color: '#000', border: 'none', borderRadius: '6px', cursor: 'pointer', whiteSpace: 'nowrap' }}
+          >
+            Search
+          </button>
+        </form>
       </div>
 
       {/* Table */}
