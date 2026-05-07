@@ -26,17 +26,16 @@ services:
         loki-pipeline-stages: |
           - json:
               expressions:
-                level: level
+                log_level: level
                 module: module
                 duration: duration
-                resultCount: resultCount
           - labels:
-              level:
+              log_level:
               module:
 
   redis:
     image: redis:7-alpine
-    container_name: kickmap-redis
+    container_name: kickmap-redisb
     restart: unless-stopped
     volumes:
       - redis_data:/data
