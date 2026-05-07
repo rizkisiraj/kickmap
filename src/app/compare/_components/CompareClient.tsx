@@ -3,7 +3,8 @@ import React, { useState, useMemo, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
-import type { Product, Currency, Region } from '@/types';
+import useSWR from 'swr';
+import type { Product, Currency, Region, ExchangeRates } from '@/types';
 import { SaleBadge } from '@/components/SaleBadge';
 import { CurrencyToggle } from '@/components/CurrencyToggle';
 import { SortControl } from '@/components/SortControl';
@@ -17,11 +18,14 @@ const CURRENCY_SYMBOL: Record<Currency, string> = {
   MYR: 'RM', IDR: 'Rp', SGD: 'S$', USD: 'US$',
 };
 
-const TO_SGD: Record<Currency, number> = { SGD: 1, MYR: 0.29, IDR: 0.000086, USD: 1.35 };
+// Fallback rates (1 SGD = X currency) used until live rates load
+const FALLBACK_RATES: Record<Currency, number> = { SGD: 1, MYR: 3.3, IDR: 11000, USD: 0.75 };
 
-function toSGD(amount: number, currency: Currency): number {
-  const rate = TO_SGD[currency] ?? 1;
-  return amount * rate;
+const fetcher = (url: string) => fetch(url).then((r) => r.json()) as Promise<ExchangeRates>;
+
+// rates are "1 SGD = X currency", so: price_in_currency / rates[currency] = price_in_SGD
+function toSGD(amount: number, currency: Currency, rates: Record<Currency, number>): number {
+  return amount / (rates[currency] ?? 1);
 }
 
 function formatPrice(amount: number, currency: Currency): string {
@@ -45,6 +49,12 @@ export function CompareClient({ products, total, initialQuery = '' }: CompareCli
     setInputValue(initialQuery);
   }, [initialQuery]);
 
+  const { data: exchangeData } = useSWR<ExchangeRates>('/api/exchange', fetcher, {
+    revalidateOnFocus: false,
+    dedupingInterval: 3600_000,
+  });
+  const rates = exchangeData?.rates ?? FALLBACK_RATES;
+
   const currency = (searchParams.get('currency') as Currency) ?? 'SGD';
   const sort = searchParams.get('sort') ?? 'NAME';
 
@@ -62,8 +72,8 @@ export function CompareClient({ products, total, initialQuery = '' }: CompareCli
     let list = [...filtered];
     if (sort === 'PRICE') {
       list.sort((a, b) => {
-        const aMin = Math.min(...a.stock.filter((s) => s.inStock).map((s) => toSGD(s.price, s.currency)));
-        const bMin = Math.min(...b.stock.filter((s) => s.inStock).map((s) => toSGD(s.price, s.currency)));
+        const aMin = Math.min(...a.stock.filter((s) => s.inStock).map((s) => toSGD(s.price, s.currency, rates)));
+        const bMin = Math.min(...b.stock.filter((s) => s.inStock).map((s) => toSGD(s.price, s.currency, rates)));
         return aMin - bMin;
       });
     } else if (sort === 'DEAL') {
@@ -151,7 +161,7 @@ export function CompareClient({ products, total, initialQuery = '' }: CompareCli
               });
 
               const stockPrices = prices
-                .map((s, i) => s ? toSGD(s.price, s.currency) : null)
+                .map((s) => s ? toSGD(s.price, s.currency, rates) : null)
                 .filter((v): v is number => v !== null);
               const minSGD = stockPrices.length > 0 ? Math.min(...stockPrices) : null;
 
@@ -186,7 +196,7 @@ export function CompareClient({ products, total, initialQuery = '' }: CompareCli
                         </td>
                       );
                     }
-                    const thisSGD = toSGD(s.price, s.currency);
+                    const thisSGD = toSGD(s.price, s.currency, rates);
                     const isCheapest = minSGD !== null && Math.abs(thisSGD - minSGD) < 0.01;
                     return (
                       <td key={r} style={{
@@ -216,7 +226,7 @@ export function CompareClient({ products, total, initialQuery = '' }: CompareCli
                   <td style={{ padding: '10px 14px', textAlign: 'center' }}>
                     {minSGD !== null ? (
                       <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', fontWeight: 700, color: 'var(--accent)' }}>
-                        {formatPrice(minSGD / TO_SGD[currency], currency)}
+                        {formatPrice(minSGD * (rates[currency] ?? 1), currency)}
                       </span>
                     ) : (
                       <span style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', color: 'var(--text3)' }}>—</span>
