@@ -58,5 +58,10 @@ CLAUDE.md
 grafana-kickmap.json
 grafana.json
 Logs-2026-*.json
+Logs-A-*.csv
 TEST_RESULT.md
 test-summary.md
+
+# k6 load/stress test scripts
+load-test.js
+stress-test.js
