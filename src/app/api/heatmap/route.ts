@@ -30,5 +30,7 @@ export async function GET(request: Request): Promise<NextResponse> {
   const duration = Date.now() - startTime;
   log.info({ duration }, 'Heatmap request completed');
 
-  return NextResponse.json({ data: result.data });
+  return NextResponse.json({ data: result.data }, {
+    headers: { 'Cache-Control': 'public, max-age=300, stale-while-revalidate=1800' },
+  });
 }

@@ -56,5 +56,7 @@ export async function GET(request: Request): Promise<NextResponse> {
   const duration = Date.now() - startTime;
   log.info({ duration, resultCount: result.data.data.length, total: result.data.meta.total }, 'Deals request completed');
 
-  return NextResponse.json(result.data);
+  return NextResponse.json(result.data, {
+    headers: { 'Cache-Control': 'public, max-age=300, stale-while-revalidate=3600' },
+  });
 }

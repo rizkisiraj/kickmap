@@ -67,6 +67,9 @@ export async function GET(request: Request): Promise<NextResponse> {
   );
 
   return NextResponse.json(result.data, {
-    headers: { 'X-RateLimit-Remaining': String(rl.remaining) },
+    headers: {
+      'X-RateLimit-Remaining': String(rl.remaining),
+      'Cache-Control': 'public, max-age=300, stale-while-revalidate=3600',
+    },
   });
 }

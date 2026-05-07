@@ -34,6 +34,9 @@ export async function GET(request: Request): Promise<NextResponse> {
   log.info({ duration, cacheStatus: result.cacheStatus }, 'Exchange request completed');
 
   return NextResponse.json(result.data, {
-    headers: { 'X-Cache-Status': result.cacheStatus },
+    headers: {
+      'X-Cache-Status': result.cacheStatus,
+      'Cache-Control': 'public, max-age=3600, stale-while-revalidate=7200',
+    },
   });
 }

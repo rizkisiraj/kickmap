@@ -44,5 +44,7 @@ export async function GET(
   const duration = Date.now() - startTime;
   log.info({ productCode, duration }, 'Product detail request completed');
 
-  return NextResponse.json(result.data);
+  return NextResponse.json(result.data, {
+    headers: { 'Cache-Control': 'public, max-age=3600, stale-while-revalidate=43200' },
+  });
 }
