@@ -9,12 +9,14 @@ const REGION_COLORS: Record<Region, string> = {
   MY: '#3b82f6',
   ID: '#ef4444',
   SG: '#f59e0b',
+  TH: '#8b5cf6',
 };
 
 const REGION_NAMES: Record<Region, string> = {
   MY: 'Malaysia',
   ID: 'Indonesia',
   SG: 'Singapore',
+  TH: 'Thailand',
 };
 
 export function RegionDot({ region, active }: RegionDotProps) {

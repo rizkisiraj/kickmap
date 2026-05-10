@@ -43,8 +43,8 @@ interface RegionMapProps {
   filters: ProductFilters;
 }
 
-const REGION_NAMES: Record<Region, string> = { MY: 'Malaysia', ID: 'Indonesia', SG: 'Singapore' };
-const REGIONS: Region[] = ['MY', 'ID', 'SG'];
+const REGION_NAMES: Record<Region, string> = { MY: 'Malaysia', ID: 'Indonesia', SG: 'Singapore', TH: 'Thailand' };
+const REGIONS: Region[] = ['MY', 'ID', 'SG', 'TH'];
 
 export function RegionMap({ regionData, hasActiveFilters, filters }: RegionMapProps) {
   const [tooltip, setTooltip] = useState<{ region: RegionInfo; pos: { x: number; y: number } } | null>(null);

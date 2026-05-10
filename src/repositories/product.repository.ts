@@ -20,7 +20,7 @@ function mapStockDoc(s: {
   scrapedAt: Date | string;
 }): RegionStock {
   return {
-    region: s.region as 'MY' | 'ID' | 'SG',
+    region: s.region as 'MY' | 'ID' | 'SG' | 'TH',
     sizesAvailable: s.sizesAvailable ?? [],
     sizesTotal: s.sizesTotal ?? [],
     inStock: s.inStock,
@@ -28,7 +28,7 @@ function mapStockDoc(s: {
     price: s.price,
     originalPrice: s.originalPrice ?? null,
     isOnSale: s.isOnSale,
-    currency: s.currency as 'MYR' | 'IDR' | 'SGD',
+    currency: s.currency as 'MYR' | 'IDR' | 'SGD' | 'THB',
     scrapedAt: s.scrapedAt instanceof Date ? s.scrapedAt.toISOString() : String(s.scrapedAt),
   };
 }

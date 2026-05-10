@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import type { RegionMapData, Region } from '@/types';
 import { getColorForStockLevel } from './useRegionColor';
 
-const REGION_FLAGS: Record<Region, string> = { MY: '🇲🇾', ID: '🇮🇩', SG: '🇸🇬' };
-const REGION_LABELS: Record<Region, string> = { MY: 'Malaysia', ID: 'Indonesia', SG: 'Singapore' };
+const REGION_FLAGS: Record<Region, string> = { MY: '🇲🇾', ID: '🇮🇩', SG: '🇸🇬', TH: '🇹🇭' };
+const REGION_LABELS: Record<Region, string> = { MY: 'Malaysia', ID: 'Indonesia', SG: 'Singapore', TH: 'Thailand' };
 
 interface RegionStatCardProps {
   data: RegionMapData;

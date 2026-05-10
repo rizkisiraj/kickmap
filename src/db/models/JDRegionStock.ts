@@ -3,7 +3,7 @@ import mongoose, { Schema, InferSchemaType } from 'mongoose';
 const JDRegionStockSchema = new Schema(
   {
     productCode: { type: String, required: true, index: true },
-    region: { type: String, required: true, enum: ['MY', 'ID', 'SG'], index: true },
+    region: { type: String, required: true, enum: ['MY', 'ID', 'SG', 'TH'], index: true },
     sizesAvailable: { type: [String], default: [] },
     sizesTotal: { type: [String], default: [] },
     inStock: { type: Boolean, required: true, index: true },
@@ -11,7 +11,7 @@ const JDRegionStockSchema = new Schema(
     price: { type: Number, required: true },
     originalPrice: { type: Number, default: null },
     isOnSale: { type: Boolean, required: true, index: true },
-    currency: { type: String, required: true, enum: ['MYR', 'IDR', 'SGD'] },
+    currency: { type: String, required: true, enum: ['MYR', 'IDR', 'SGD', 'THB'] },
     scrapedAt: { type: Date, required: true },
   },
   {

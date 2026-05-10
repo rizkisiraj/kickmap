@@ -66,11 +66,11 @@ export const dealsRepository = {
         ...(productData?.colorway !== undefined ? { colorway: productData.colorway } : {}),
         imageUrl: productData?.imageUrl ?? '',
         vendor: productData?.vendor ?? '',
-        region: r.region as 'MY' | 'ID' | 'SG',
+        region: r.region as 'MY' | 'ID' | 'SG' | 'TH',
         price: r.price,
         originalPrice: r.originalPrice ?? r.price,
         discountPercent: r.discountPercent,
-        currency: r.currency as 'MYR' | 'IDR' | 'SGD',
+        currency: r.currency as 'MYR' | 'IDR' | 'SGD' | 'THB',
         totalStock: r.totalStock,
         scrapedAt: r.scrapedAt instanceof Date ? r.scrapedAt.toISOString() : String(r.scrapedAt),
       };

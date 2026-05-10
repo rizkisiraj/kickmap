@@ -9,9 +9,9 @@ import { LowStockIndicator } from '@/components/LowStockIndicator';
 import { formatDate } from '@/lib/format';
 import { getColorForStockLevel } from '@/components/RegionMap/useRegionColor';
 
-const REGION_FLAGS: Record<Region, string> = { MY: '🇲🇾', ID: '🇮🇩', SG: '🇸🇬' };
-const REGION_NAMES: Record<Region, string> = { MY: 'Malaysia', ID: 'Indonesia', SG: 'Singapore' };
-const REGION_COLORS: Record<Region, string> = { MY: '#3b82f6', ID: '#ef4444', SG: '#f59e0b' };
+const REGION_FLAGS: Record<Region, string> = { MY: '🇲🇾', ID: '🇮🇩', SG: '🇸🇬', TH: '🇹🇭' };
+const REGION_NAMES: Record<Region, string> = { MY: 'Malaysia', ID: 'Indonesia', SG: 'Singapore', TH: 'Thailand' };
+const REGION_COLORS: Record<Region, string> = { MY: '#3b82f6', ID: '#ef4444', SG: '#f59e0b', TH: '#8b5cf6' };
 
 interface ProductDetailClientProps {
   product: Product;
@@ -157,7 +157,7 @@ export function ProductDetailClient({ product, regions, cheapestRegion, savings,
 
       {/* Footer */}
       <div style={{ paddingTop: '16px', borderTop: '1px solid var(--border)', fontSize: '11px', color: 'var(--text3)', fontFamily: 'var(--font-mono)' }}>
-        Last scraped · {latestScrapedAt !== null ? formatDate(latestScrapedAt) : '—'} · JD Sports MY, ID, SG
+        Last scraped · {latestScrapedAt !== null ? formatDate(latestScrapedAt) : '—'} · JD Sports MY, ID, SG, TH
       </div>
     </div>
   );

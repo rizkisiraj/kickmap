@@ -9,6 +9,7 @@ const REGION_COLORS: Record<string, string> = {
   MY: '#3b82f6',
   ID: '#ef4444',
   SG: '#f59e0b',
+  TH: '#8b5cf6',
 };
 
 export function Navbar({ lastUpdated }: NavbarProps) {

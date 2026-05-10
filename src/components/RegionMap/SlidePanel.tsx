@@ -18,9 +18,9 @@ interface SlidePanelProps {
   onNavigate: (path: string) => void;
 }
 
-const REGION_FLAGS: Record<Region, string> = { MY: '🇲🇾', ID: '🇮🇩', SG: '🇸🇬' };
-const REGION_NAMES: Record<Region, string> = { MY: 'Malaysia', ID: 'Indonesia', SG: 'Singapore' };
-const CURRENCY_PREFIX: Record<string, string> = { MYR: 'RM', IDR: 'Rp', SGD: 'S$', USD: 'US$' };
+const REGION_FLAGS: Record<Region, string> = { MY: '🇲🇾', ID: '🇮🇩', SG: '🇸🇬', TH: '🇹🇭' };
+const REGION_NAMES: Record<Region, string> = { MY: 'Malaysia', ID: 'Indonesia', SG: 'Singapore', TH: 'Thailand' };
+const CURRENCY_PREFIX: Record<string, string> = { MYR: 'RM', IDR: 'Rp', SGD: 'S$', THB: '฿', USD: 'US$' };
 
 function formatPrice(amount: number, currency: string): string {
   const prefix = CURRENCY_PREFIX[currency] ?? currency;

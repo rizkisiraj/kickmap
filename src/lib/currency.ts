@@ -4,12 +4,14 @@ export const REGION_CURRENCY: Record<Region, Currency> = {
   MY: 'MYR',
   ID: 'IDR',
   SG: 'SGD',
+  TH: 'THB',
 };
 
 export const CURRENCY_SYMBOL: Record<Currency, string> = {
   MYR: 'RM',
   IDR: 'Rp',
   SGD: 'S$',
+  THB: '฿',
   USD: 'US$',
 };
 

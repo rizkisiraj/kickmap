@@ -15,6 +15,7 @@ const REGION_FLAGS: Record<Region, string> = {
   MY: '🇲🇾',
   ID: '🇮🇩',
   SG: '🇸🇬',
+  TH: '🇹🇭',
 };
 
 export function MapTooltip({

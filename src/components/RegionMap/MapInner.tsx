@@ -21,12 +21,14 @@ const REGION_LABELS: Record<string, string> = {
   MY: 'Malaysia',
   ID: 'Indonesia',
   SG: 'Singapore',
+  TH: 'Thailand',
 };
 
 const ISO_TO_REGION: Record<string, Region> = {
   MY: 'MY',
   ID: 'ID',
   SG: 'SG',
+  TH: 'TH',
 };
 
 interface RegionClickInfo {
@@ -181,7 +183,7 @@ export default function MapInner({ regionData, onRegionClick, onRegionHover }: M
     <div style={{ position: 'relative', aspectRatio: '420/310', background: '#0d1117', border: '1px solid var(--border)', borderRadius: '10px', overflow: 'hidden' }}>
       <MapContainer
         key="leaflet-map"
-        bounds={[[-11, 95], [7, 140]]}
+        bounds={[[-11, 93], [22, 140]]}
         zoomControl={false}
         scrollWheelZoom={false}
         doubleClickZoom={false}

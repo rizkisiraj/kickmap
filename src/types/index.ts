@@ -1,5 +1,5 @@
-export type Region = 'MY' | 'ID' | 'SG';
-export type Currency = 'MYR' | 'IDR' | 'SGD' | 'USD';
+export type Region = 'MY' | 'ID' | 'SG' | 'TH';
+export type Currency = 'MYR' | 'IDR' | 'SGD' | 'THB' | 'USD';
 export type StockLevel = 'high' | 'medium' | 'low' | 'none'; // 4 levels
 
 export interface RegionStock {

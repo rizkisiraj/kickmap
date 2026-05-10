@@ -9,17 +9,17 @@ import { SaleBadge } from '@/components/SaleBadge';
 import { CurrencyToggle } from '@/components/CurrencyToggle';
 import { SortControl } from '@/components/SortControl';
 
-const REGIONS: Region[] = ['MY', 'ID', 'SG'];
-const REGION_FLAGS: Record<Region, string> = { MY: '🇲🇾', ID: '🇮🇩', SG: '🇸🇬' };
-const REGION_CURRENCY: Record<Region, Currency> = { MY: 'MYR', ID: 'IDR', SG: 'SGD' };
-const REGION_COLORS: Record<Region, string> = { MY: '#3b82f6', ID: '#ef4444', SG: '#f59e0b' };
+const REGIONS: Region[] = ['MY', 'ID', 'SG', 'TH'];
+const REGION_FLAGS: Record<Region, string> = { MY: '🇲🇾', ID: '🇮🇩', SG: '🇸🇬', TH: '🇹🇭' };
+const REGION_CURRENCY: Record<Region, Currency> = { MY: 'MYR', ID: 'IDR', SG: 'SGD', TH: 'THB' };
+const REGION_COLORS: Record<Region, string> = { MY: '#3b82f6', ID: '#ef4444', SG: '#f59e0b', TH: '#8b5cf6' };
 
 const CURRENCY_SYMBOL: Record<Currency, string> = {
-  MYR: 'RM', IDR: 'Rp', SGD: 'S$', USD: 'US$',
+  MYR: 'RM', IDR: 'Rp', SGD: 'S$', THB: '฿', USD: 'US$',
 };
 
 // Fallback rates (1 SGD = X currency) used until live rates load
-const FALLBACK_RATES: Record<Currency, number> = { SGD: 1, MYR: 3.3, IDR: 11000, USD: 0.75 };
+const FALLBACK_RATES: Record<Currency, number> = { SGD: 1, MYR: 3.3, IDR: 11000, THB: 26, USD: 0.75 };
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json()) as Promise<ExchangeRates>;
 

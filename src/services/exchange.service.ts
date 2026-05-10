@@ -30,6 +30,7 @@ export const exchangeService = {
         SGD: 1,
         MYR: json.rates['MYR'] ?? 3.3,
         IDR: json.rates['IDR'] ?? 11000,
+        THB: json.rates['THB'] ?? 26,
         USD: json.rates['USD'] ?? 0.75,
       };
 

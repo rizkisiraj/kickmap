@@ -12,9 +12,9 @@ interface ProductCardProps {
   priority?: boolean;
 }
 
-const REGIONS: Region[] = ['MY', 'ID', 'SG'];
+const REGIONS: Region[] = ['MY', 'ID', 'SG', 'TH'];
 const CURRENCY_PREFIX: Record<string, string> = {
-  MYR: 'RM', IDR: 'Rp', SGD: 'S$', USD: 'US$',
+  MYR: 'RM', IDR: 'Rp', SGD: 'S$', THB: '฿', USD: 'US$',
 };
 
 function formatPrice(amount: number, currency: string): string {

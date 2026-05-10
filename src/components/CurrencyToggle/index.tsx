@@ -2,7 +2,7 @@
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import type { Currency } from '@/types';
 
-const CURRENCIES: Currency[] = ['SGD', 'IDR', 'MYR'];
+const CURRENCIES: Currency[] = ['SGD', 'IDR', 'MYR', 'THB'];
 
 export function CurrencyToggle() {
   const router = useRouter();

@@ -5,7 +5,7 @@ import { createLogger } from '@/lib/logger';
 
 const log = createLogger('repo:heatmap');
 
-const ALL_REGIONS: Array<'MY' | 'ID' | 'SG'> = ['MY', 'ID', 'SG'];
+const ALL_REGIONS: Array<'MY' | 'ID' | 'SG' | 'TH'> = ['MY', 'ID', 'SG', 'TH'];
 
 function deriveStockLevel(inStockCount: number): StockLevel {
   if (inStockCount > 200) return 'high';

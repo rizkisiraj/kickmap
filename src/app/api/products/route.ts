@@ -8,7 +8,7 @@ const log = createLogger('api:products');
 
 export const dynamic = 'force-dynamic';
 
-const VALID_REGIONS = new Set<string>(['MY', 'ID', 'SG']);
+const VALID_REGIONS = new Set<string>(['MY', 'ID', 'SG', 'TH']);
 
 export async function GET(request: Request): Promise<NextResponse> {
   const startTime = Date.now();
