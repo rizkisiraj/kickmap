@@ -8,7 +8,7 @@ import { SaleBadge } from '@/components/SaleBadge';
 import { LowStockIndicator } from '@/components/LowStockIndicator';
 
 const CURRENCY_SYMBOL: Record<Currency, string> = {
-  MYR: 'RM', IDR: 'Rp', SGD: 'S$', USD: 'US$',
+  MYR: 'RM', IDR: 'Rp', SGD: 'S$', THB: '฿', USD: 'US$',
 };
 
 function formatPrice(amount: number, currency: Currency): string {
