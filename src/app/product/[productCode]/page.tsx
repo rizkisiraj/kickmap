@@ -29,11 +29,11 @@ export async function generateMetadata({ params }: Pick<ProductPageProps, 'param
   };
 }
 
-const REGION_NAMES: Record<Region, string> = { MY: 'Malaysia', ID: 'Indonesia', SG: 'Singapore' };
-const REGION_FLAGS: Record<Region, string> = { MY: '🇲🇾', ID: '🇮🇩', SG: '🇸🇬' };
+const REGION_NAMES: Record<Region, string> = { MY: 'Malaysia', ID: 'Indonesia', SG: 'Singapore', TH: 'Thailand' };
+const REGION_FLAGS: Record<Region, string> = { MY: '🇲🇾', ID: '🇮🇩', SG: '🇸🇬', TH: '🇹🇭' };
 
 // Approximate SGD conversion
-const TO_SGD: Record<string, number> = { SGD: 1, MYR: 0.29, IDR: 0.000086, USD: 1.35 };
+const TO_SGD: Record<string, number> = { SGD: 1, MYR: 0.29, IDR: 0.000086, USD: 1.35, THB: 0.038 };
 
 export default async function ProductPage({ params }: ProductPageProps) {
   const { productCode } = await params;
@@ -44,7 +44,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
   }
 
   const product = result.data;
-  const regions: Region[] = ['MY', 'ID', 'SG'];
+  const regions: Region[] = ['MY', 'ID', 'SG', 'TH'];
 
   // Find cheapest region in SGD
   let cheapestRegion: Region | null = null;

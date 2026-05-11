@@ -62,14 +62,24 @@ export function HeatmapFilterBar({ filters, onFiltersChange, brands, allProducts
       fetch(`/api/products?${params.toString()}`)
         .then((res) => res.json() as Promise<PaginatedResponse<{ productCode: string; vendor: string; title: string; colorway?: string }>>)
         .then((json) => {
-          setAutocompleteItems(
-            json.data.map((p) => ({
-              productCode: p.productCode,
-              vendor: p.vendor,
-              title: p.title,
-              ...(p.colorway !== undefined ? { colorway: p.colorway } : {}),
-            })),
-          );
+          const q = modelQuery.trim().toLowerCase();
+          const items = json.data.map((p) => ({
+            productCode: p.productCode,
+            vendor: p.vendor,
+            title: p.title,
+            ...(p.colorway !== undefined ? { colorway: p.colorway } : {}),
+          }));
+          items.sort((a, b) => {
+            const aTitle = a.title.toLowerCase();
+            const bTitle = b.title.toLowerCase();
+            const rank = (t: string) => {
+              if (t === q) return 0;
+              if (t.startsWith(q)) return 1;
+              return 2;
+            };
+            return rank(aTitle) - rank(bTitle);
+          });
+          setAutocompleteItems(items);
         })
         .catch(() => { setAutocompleteItems([]); });
     }, 300);

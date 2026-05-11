@@ -11,6 +11,7 @@ const CURRENCY_LOCALE: Record<Currency, { locale: string; currency: string; pref
   MYR: { locale: 'ms-MY', currency: 'MYR', prefix: 'RM' },
   IDR: { locale: 'id-ID', currency: 'IDR', prefix: 'Rp' },
   SGD: { locale: 'en-SG', currency: 'SGD', prefix: 'S$' },
+  THB: { locale: 'th-TH', currency: 'THB', prefix: '฿' },
   USD: { locale: 'en-US', currency: 'USD', prefix: 'US$' },
 };
 

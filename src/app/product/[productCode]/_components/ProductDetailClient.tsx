@@ -67,7 +67,7 @@ export function ProductDetailClient({ product, regions, cheapestRegion, savings,
         <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text3)', marginBottom: '10px' }}>
           AVAILABILITY BY REGION
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
           {regions.map((region) => {
             const s = product.stock.find((st) => st.region === region);
             const isAvailable = s?.inStock === true;
