@@ -68,7 +68,10 @@
 // ── Scenarios (individually selectable — this does NOT default to a
 //    25-minute run) ────────────────────────────────────────────────────────
 // Select with __ENV.SCENARIO: 'breakpoint' (default), 'steady', 'cold_cache',
-// or 'all' to run all three back-to-back (~30 min — opt in explicitly).
+// 'miss', 'stampede', 'soak', or 'all' to run breakpoint/steady/cold_cache
+// back-to-back (~30 min — opt in explicitly). 'miss', 'stampede', 'soak' are
+// NOT included in 'all' — they're long/destructive/manual-follow-up enough
+// that they should always be invoked explicitly.
 //
 //   breakpoint  ramping-arrival-rate, ~50 → 1500 req/s over ~10m, no
 //               plateau. This is the discovery run — its job is to find
@@ -84,10 +87,81 @@
 //               under constant OFFERED load rather than a closed-model test
 //               that would self-throttle around the stampede.
 //
+//   miss        ramping-arrival-rate, ~10 → 300 req/s over ~8m. Forces a
+//               cache miss BY CONSTRUCTION on (almost) every request instead
+//               of flushing Redis, so it's repeatable and non-destructive —
+//               this measures the real DB-bound ceiling, not the Redis-
+//               bound one `breakpoint` finds at warm cache. See the
+//               scenario definition below for exactly which params
+//               guarantee a fresh cache key/bypass and why (this depends on
+//               how `src/services/product.service.ts` builds cache keys —
+//               read that comment before touching this scenario).
+//   stampede    Correctness test, not a throughput test. Busts the cache for
+//               one specific URL, then fires ~200 requests at that exact
+//               same URL as close to simultaneously as possible. Verifies
+//               withCache's single-flight + distributed lock in
+//               `src/lib/cache.ts` collapse N concurrent misses into ~1
+//               Mongo query.
+//
+//               PASS/FAIL is read server-side in Loki, not from k6's own
+//               output (k6 only sees 200s, which is expected whether or not
+//               single-flight is working — it's the Mongo query COUNT that
+//               proves it). Run the app at LOG_LEVEL=debug for this
+//               scenario specifically — repo:product's per-query completion
+//               line ("Product query completed") is logged at debug, and at
+//               the default warn/info level it's invisible except when the
+//               query happens to be slow (>100ms), which is not reliable
+//               enough to count against. After the run, in Grafana/Loki:
+//               1. Narrow the time range to the burst's few-second window.
+//               2. Run:
+//                    sum(count_over_time(
+//                      {container="kickmap", module="repo:product"}
+//                      | json | filters="vendor,onSaleOnly" [$__interval]
+//                    ))
+//                  (STAMPEDE_URL_PATH below is
+//                  `?vendor=StampedeTest&onSaleOnly=true` — filterSummary
+//                  in product.repository.ts joins filter KEYS, not values,
+//                  so "vendor,onSaleOnly" is what that specific combo logs
+//                  as.)
+//               3. PASS: count is 1 (or a small single-digit number if a
+//                  lock timeout forced a fallback fetch — see "Lock
+//                  timeout — fetching ourselves" in src/lib/cache.ts). FAIL:
+//                  count is anywhere near 200 — single-flight/the
+//                  distributed lock did not collapse the burst and every
+//                  request independently hit Mongo.
+//               Repeat several bursts by re-running the command below in a
+//               shell loop (__ENV.REPEATS is informational — see why in the
+//               setup()/scenario comments, not an internal loop).
+//   soak        constant-arrival-rate at __ENV.SOAK_RATE req/s (default
+//               100), held __ENV.SOAK_DURATION (default 60m). Purpose is
+//               DRIFT detection, not finding a ceiling — pick SOAK_RATE
+//               comfortably below whatever knee `breakpoint`/`miss` found,
+//               so any degradation over the hour is drift, not saturation.
+//               Watch, over the FULL window, in Grafana panels 11 ("Mongo
+//               Pool") and 12 ("Node Process") — per OBSERVABILITY.md
+//               these are NOT scoped by $test_run (periodic telemetry, no
+//               testRun field), so select the run's time range instead:
+//                 - rss / heapUsed trending up with no plateau = leak
+//                 - poolInUse trending up with no plateau, or approaching
+//                   ~3×poolSize with no recovery = connection leak/pool
+//                   exhaustion building slowly
+//                 - Redis memory (check via `redis-cli info memory` or a
+//                   Grafana Redis panel if one exists — not currently
+//                   covered by grafana.json) trending up = key/TTL
+//                   mismanagement, e.g. keys outliving their intended TTL
+//                 - eventLoopLag_mean drifting meaningfully above its ~20ms
+//                   idle baseline (see OBSERVABILITY.md §6 on why 20ms
+//                   itself is NOT a problem) = growing GC pressure or sync
+//                   work creeping onto the main thread
+//               A flat line on all four over the full duration is a pass.
+//
 // Example runs (from the VPS):
 //   LOG_LEVEL=warn TIER=A TEST_RUN=$(uuidgen) k6 run capacity-test.js
 //   TIER=A SCENARIO=steady STEADY_RATE=350 k6 run capacity-test.js
 //   TIER=A SCENARIO=cold_cache k6 run capacity-test.js
+//   TIER=A SCENARIO=miss k6 run capacity-test.js
+//   TIER=A SCENARIO=stampede SCRAPER_SECRET=xxx k6 run capacity-test.js
+//   TIER=A SCENARIO=soak SOAK_RATE=150 SOAK_DURATION=90m k6 run capacity-test.js
 // ─────────────────────────────────────────────────────────────────────────────
 
 import http from 'k6/http';
@@ -110,10 +184,15 @@ const TEST_RUN = __ENV.TEST_RUN || `run-${Date.now()}-${Math.floor(Math.random()
 const SCENARIO = __ENV.SCENARIO || 'breakpoint';
 const STEADY_RATE = Number(__ENV.STEADY_RATE || 500);
 const COLD_CACHE_RATE = Number(__ENV.COLD_CACHE_RATE || 200);
+const SOAK_RATE = Number(__ENV.SOAK_RATE || 100);
+const SOAK_DURATION = __ENV.SOAK_DURATION || '60m';
+const STAMPEDE_VUS = Number(__ENV.STAMPEDE_VUS || 200);
+const REPEATS = Number(__ENV.REPEATS || 1);
 
 const REGIONS = ['MY', 'ID', 'SG', 'TH'];
 const SIZES   = ['7', '7.5', '8', '8.5', '9', '9.5', '10', '10.5', '11', '12'];
 const VENDORS = ['Nike', 'Adidas', 'New Balance', 'Puma', 'Reebok', 'Asics', 'Vans', 'Converse'];
+const GENDERS = ['men', 'women', 'unisex', 'kids'];
 
 let knownProductCodes = [];
 
@@ -202,6 +281,100 @@ function mixedRequest() {
   }
 }
 
+// ── miss scenario ─────────────────────────────────────────────────────────
+// Cache-key contract this scenario depends on (confirmed by reading
+// src/services/product.service.ts + src/lib/cache-keys.ts — read those
+// before changing this):
+//
+//   buildCacheKey(filters) takes EVERY defined key in ProductFilters
+//   (region, vendor, inStock, size, gender, onSaleOnly, model, q,
+//   multiRegion), sorts the entries, and joins them into
+//   `products:filtered:<k>:<v>|<k>:<v>|...`. So region/vendor/size/gender/
+//   onSaleOnly/model ALL feed the key — varying any of them changes it.
+//
+//   BUT: `q` does NOT feed a cache key at all — product.service.ts's
+//   getProducts() branches around withCache entirely when `filters.q` is
+//   defined ("Skip cache for free-text q queries to prevent Redis key
+//   explosion"), calling productRepository.findMany() directly. So a
+//   request with `q=` is not a "miss" in the cache sense — there is no key,
+//   ever, for it. It's an unconditional Mongo hit, which is exactly what
+//   this scenario wants for the ~25% bucket that uses it below.
+//
+//   Naive high-cardinality combos of just vendor×size×region×gender×
+//   onSaleOnly are NOT enough by themselves: those sets are small (4×10×
+//   8×4×2 = 2560 combos) and this scenario runs at up to 300 req/s for ~8
+//   minutes (~130K+ iterations) — every combo would repeat thousands of
+//   times and mostly hit a WARM cache after the first pass, silently
+//   turning "miss" into "breakpoint". So every filtered-combo request also
+//   sets `model=<per-iteration nonce>`. `model` is a real ProductFilters
+//   key that feeds buildCacheKey (and is used as a $regex on title/
+//   colorway in product.repository.ts — matches nothing, which is fine,
+//   this is a synthetic load shape, not a correctness test), so the nonce
+//   guarantees a cache key never seen before on every single iteration.
+function nonceToken() {
+  return `n${__VU}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function missRequest() {
+  const roll = Math.random() * 100;
+
+  if (roll < 5) {
+    // The brutal compare-page pattern (src/app/compare/page.tsx fetches
+    // `multiRegion=true` + optional `q`). Deliberately capped at ~5% of
+    // iterations — it's pathological (limit=10000, though the route clamps
+    // to 500 server-side) and would dominate the result if weighted any
+    // higher. `q` present ⇒ unconditional cache bypass, see comment above.
+    const token = nonceToken();
+    const res = get(
+      `${BASE_URL}/api/products?multiRegion=true&q=${encodeURIComponent(token)}&limit=10000`,
+      { endpoint: 'miss-multiregion' },
+    );
+    check(res, { 'miss multiregion ok': (r) => r.status === 200 || r.status === 429 });
+  } else if (roll < 30) {
+    // Free-text search — bypasses the cache layer entirely by construction
+    // (see comment above), guaranteed Mongo hit via the $or regex search
+    // path in product.repository.ts.
+    const token = nonceToken();
+    const res = get(
+      `${BASE_URL}/api/products?q=${encodeURIComponent(token)}&limit=24`,
+      { endpoint: 'miss-search' },
+    );
+    check(res, { 'miss search ok': (r) => r.status === 200 || r.status === 429 });
+  } else {
+    // High-cardinality filter combo (real vendor/size/region/gender/
+    // onSaleOnly values, realistic query shape) + a `model` nonce to force
+    // a cache key never seen before — see comment above for why the nonce
+    // is required and why it's `model` specifically.
+    // NOTE: k6 runs on goja, not Node or a browser — there is no
+    // URLSearchParams, URL, fetch, or Buffer. Build query strings by hand.
+    const token = nonceToken();
+    const parts = [
+      `vendor=${encodeURIComponent(pick(VENDORS))}`,
+      `size=${encodeURIComponent(pick(SIZES))}`,
+      `region=${encodeURIComponent(pick(REGIONS))}`,
+      `gender=${encodeURIComponent(pick(GENDERS))}`,
+    ];
+    if (Math.random() < 0.5) parts.push('onSaleOnly=true');
+    parts.push(`model=${encodeURIComponent(token)}`);
+    parts.push('limit=24');
+    const res = get(`${BASE_URL}/api/products?${parts.join('&')}`, { endpoint: 'miss-filtered' });
+    check(res, { 'miss filtered ok': (r) => r.status === 200 || r.status === 429 });
+  }
+}
+
+// ── stampede scenario ────────────────────────────────────────────────────
+// Fixed target URL — every VU in the burst hits the exact same cache key
+// (`products:filtered:onSaleOnly:true|vendor:StampedeTest`) so withCache's
+// single-flight (`inFlight` Map) + distributed lock (`lock:<key>`, EX 30,
+// NX) in src/lib/cache.ts have exactly one thing to collapse concurrent
+// misses onto.
+const STAMPEDE_URL_PATH = '/api/products?vendor=StampedeTest&onSaleOnly=true&limit=24';
+
+function stampedeRequest() {
+  const res = get(`${BASE_URL}${STAMPEDE_URL_PATH}`, { endpoint: 'stampede' });
+  check(res, { 'stampede ok': (r) => r.status === 200 || r.status === 429 });
+}
+
 // ── Scenario definitions ─────────────────────────────────────────────────
 
 const allScenarios = {
@@ -246,12 +419,69 @@ const allScenarios = {
     exec: 'mixedRequest',
     tags: { scenario: 'cold_cache' },
   },
+  miss: {
+    executor: 'ramping-arrival-rate',
+    startRate: 10,
+    timeUnit: '1s',
+    preAllocatedVUs: 300,
+    maxVUs: 3000,
+    stages: [
+      // ~8 minutes total. Ceiling here is expected to be MUCH lower than
+      // breakpoint's 1500 — every request is DB-bound by construction (see
+      // missRequest() comment above), so the knee should show up well
+      // before 300 req/s if Mongo is the bottleneck.
+      { target: 50, duration: '1m30s' },
+      { target: 120, duration: '2m' },
+      { target: 200, duration: '2m' },
+      { target: 300, duration: '2m30s' },
+    ],
+    exec: 'missRequest',
+    tags: { scenario: 'miss' },
+  },
+  // Correctness test, not a throughput test — see header comment and the
+  // stampedeRequest()/setup() comments for the full contract. shared-
+  // iterations chosen over constant-arrival-rate deliberately: with
+  // shared-iterations, all `STAMPEDE_VUS` VUs are allocated and started
+  // together and each immediately fires its one iteration — there is no
+  // scheduling spread across a timeUnit the way an arrival-rate executor
+  // would impose (e.g. rate:200/timeUnit:1s still staggers arrivals across
+  // that full second). shared-iterations is the tightest concurrent burst
+  // k6's executors offer, which is exactly what's needed to hit
+  // withCache's single-flight/lock window before the first response comes
+  // back and repopulates the cache.
+  stampede: {
+    executor: 'shared-iterations',
+    vus: STAMPEDE_VUS,
+    iterations: STAMPEDE_VUS,
+    maxDuration: '30s',
+    exec: 'stampedeRequest',
+    tags: { scenario: 'stampede' },
+  },
+  soak: {
+    executor: 'constant-arrival-rate',
+    rate: SOAK_RATE,
+    timeUnit: '1s',
+    duration: SOAK_DURATION,
+    preAllocatedVUs: Math.max(200, Math.ceil(SOAK_RATE * 0.5)),
+    maxVUs: Math.max(1000, SOAK_RATE * 3),
+    // Realistic mixed traffic shape (same journey mix as breakpoint/steady)
+    // — soak is about drift over time, not a novel request pattern.
+    exec: 'mixedRequest',
+    tags: { scenario: 'soak' },
+  },
 };
 
 function selectedScenarios() {
-  if (SCENARIO === 'all') return allScenarios;
+  if (SCENARIO === 'all') {
+    // 'all' stays scoped to the original three — miss/stampede/soak are
+    // long-running, destructive-adjacent, or need manual Loki follow-up, so
+    // they're opt-in only, never bundled into a default multi-scenario run.
+    return { breakpoint: allScenarios.breakpoint, steady: allScenarios.steady, cold_cache: allScenarios.cold_cache };
+  }
   if (!allScenarios[SCENARIO]) {
-    throw new Error(`Unknown SCENARIO "${SCENARIO}" — expected one of: breakpoint, steady, cold_cache, all`);
+    throw new Error(
+      `Unknown SCENARIO "${SCENARIO}" — expected one of: breakpoint, steady, cold_cache, miss, stampede, soak, all`,
+    );
   }
   return { [SCENARIO]: allScenarios[SCENARIO] };
 }
@@ -266,6 +496,12 @@ export const options = {
     // saturation is severe and unambiguous (>200 dropped iterations) — by
     // then the ceiling is already established and continuing to climb
     // toward 1500 req/s just burns generator resources for no new signal.
+    // Applies globally regardless of which SCENARIO is selected (only one
+    // scenario runs per invocation, except 'all'), which is what keeps this
+    // guard live on `miss` (a ceiling-finding scenario, same as
+    // `breakpoint`) without having to duplicate it per-scenario. Never
+    // remove this — ceiling-finding scenarios must abort at the knee, not
+    // push toward OOM.
     dropped_iterations: [{ threshold: 'count<200', abortOnFail: true }],
 
     // Deliberately NOT setting a tight p95 threshold — see header comment.
@@ -280,25 +516,45 @@ export const options = {
 };
 
 // ── setup(): runs exactly once, before any scenario's VUs start ──────────
-// Only meaningful for the cold_cache scenario — busts the Redis product/
-// heatmap caches so the run measures withCache's single-flight + distributed
-// lock recovering under constant offered load, not a warm cache. Using
-// setup() (rather than "first iteration on VU 1", as stress-test.js does for
-// its closed-model cold_cache scenario) guarantees exactly one bust,
-// independent of how many VUs constant-arrival-rate spins up concurrently
-// at t=0.
+// Meaningful for cold_cache (busts the whole products:*/heatmap:* space so
+// the run measures withCache's single-flight + distributed lock recovering
+// under constant offered load, not a warm cache) and for stampede (busts
+// the same space so STAMPEDE_URL_PATH's specific key is guaranteed cold
+// before the burst — without this, a prior run's TTL could still have it
+// warm and the "stampede" would just be 200 cache hits, proving nothing).
+// Using setup() (rather than "first iteration on VU 1", as stress-test.js
+// does for its closed-model cold_cache scenario) guarantees exactly one
+// bust, independent of how many VUs spin up concurrently at t=0.
+//
+// stampede + REPEATS: setup() only runs once per k6 process invocation, so
+// REPEATS is NOT an internal loop here — a second in-process burst would
+// hit a now-warm cache (the first burst's single winning request populates
+// Redis) and "prove" single-flight is working even if it isn't, because
+// there'd be nothing left to collapse. Each burst needs its own fresh
+// setup()-driven bust, so REPEATS is consumed by re-invoking `k6 run`
+// itself, once per burst (see the shell loop in OBSERVABILITY.md's
+// runbook). __ENV.REPEATS is read here only to print it for the operator.
 export function setup() {
-  if (SCENARIO !== 'cold_cache' && SCENARIO !== 'all') return;
+  if (SCENARIO === 'cold_cache' || SCENARIO === 'all' || SCENARIO === 'stampede') {
+    const res = http.post(`${BASE_URL}/api/revalidate`, null, {
+      headers: {
+        'X-Test-Run': TEST_RUN,
+        Authorization: `Bearer ${__ENV.SCRAPER_SECRET ?? ''}`,
+      },
+    });
+    console.log(`Cache bust for ${SCENARIO} scenario: HTTP ${res.status}`);
+  }
 
-  const res = http.post(`${BASE_URL}/api/revalidate`, null, {
-    headers: {
-      'X-Test-Run': TEST_RUN,
-      Authorization: `Bearer ${__ENV.SCRAPER_SECRET ?? ''}`,
-    },
-  });
-  console.log(`Cache bust for cold_cache scenario: HTTP ${res.status}`);
+  if (SCENARIO === 'stampede') {
+    console.log(
+      `Stampede burst: ${STAMPEDE_VUS} concurrent requests at ${BASE_URL}${STAMPEDE_URL_PATH}. ` +
+      `This is burst 1 of REPEATS=${REPEATS} — re-run this exact command ${REPEATS} times ` +
+      `(each invocation re-busts the cache in its own setup()) to get multiple bursts. ` +
+      `After each run, check Loki (see header comment) for the repo query count.`,
+    );
+  }
 }
 
 // k6 resolves `exec` by exported function name — export under the name used
 // in the scenario definitions above.
-export { mixedRequest };
+export { mixedRequest, missRequest, stampedeRequest };
