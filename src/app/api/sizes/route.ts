@@ -3,6 +3,7 @@ import { withCache, CACHE_TTL } from '@/lib/cache';
 import { connectDB } from '@/db/connection';
 import { JDRegionStockModel } from '@/db/models/JDRegionStock';
 import { createLogger } from '@/lib/logger';
+import { getTestRun } from '@/lib/test-run';
 
 const log = createLogger('api:sizes');
 
@@ -16,16 +17,28 @@ async function fetchAvailableSizes(): Promise<string[]> {
   return result[0]?.sizes ?? [];
 }
 
-export const GET = async (): Promise<NextResponse> => {
+export const GET = async (request: Request): Promise<NextResponse> => {
   const startTime = Date.now();
+  const testRun = getTestRun(request);
   try {
     const sizes = await withCache('products:sizes', CACHE_TTL.PRODUCTS, fetchAvailableSizes);
     const duration = Date.now() - startTime;
-    log.info({ duration, sizeCount: sizes.length }, 'Sizes request completed');
+    log.info(
+      { duration, status: 200, sizeCount: sizes.length, ...(testRun !== undefined ? { testRun } : {}) },
+      'Sizes request completed',
+    );
     return NextResponse.json(sizes);
   } catch (err) {
     const duration = Date.now() - startTime;
-    log.error({ duration, error: err instanceof Error ? err.message : String(err) }, 'Sizes API error');
+    log.error(
+      {
+        duration,
+        status: 500,
+        error: err instanceof Error ? err.message : String(err),
+        ...(testRun !== undefined ? { testRun } : {}),
+      },
+      'Sizes API error',
+    );
     return NextResponse.json({ error: 'Failed to fetch sizes' }, { status: 500 });
   }
 };

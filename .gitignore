@@ -54,6 +54,7 @@ TASK_FRONTEND.md
 TESTING.md
 AGENTS.md
 CLAUDE.md
+PROJECT_DESC.md
 
 grafana-kickmap.json
 grafana.json
@@ -65,3 +66,5 @@ test-summary.md
 # k6 load/stress test scripts
 load-test.js
 stress-test.js
+
+nginx-config.md

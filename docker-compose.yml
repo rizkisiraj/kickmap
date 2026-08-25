@@ -21,7 +21,14 @@ services:
     logging:
       driver: loki
       options:
-        loki-url: "http://loki:3100/loki/api/v1/push"
+        # The loki log driver is a plugin running in the DOCKER DAEMON on the
+        # host, not inside the compose network — it cannot resolve the `loki`
+        # service name via Docker's embedded DNS. It must reach Loki through
+        # the published host port. Do not "fix" this to http://loki:3100.
+        mode: non-blocking
+        max-buffer-size: 4m
+        loki-retries: "2"
+        loki-url: "http://127.0.0.1:3100/loki/api/v1/push"
         loki-external-labels: "container={{.Name}},environment=production"
         loki-pipeline-stages: |
           - json:
@@ -49,6 +56,7 @@ services:
     image: grafana/loki:3.0.0
     container_name: kickmap-loki
     restart: unless-stopped
+    mem_limit: 512m
     volumes:
       - loki_data:/loki
       - ./loki-config.yaml:/etc/loki/local-config.yaml:ro
