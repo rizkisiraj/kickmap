@@ -455,6 +455,32 @@ For panels 7, 11, 12, correlate to a specific run by **time range**, not the var
 
 ---
 
+## Runbook — extended `capacity-test.js` scenarios + `chaos-test.js`
+
+Cheatsheet, not prose. Run order top to bottom. All commands assume TIER=A, `LOG_LEVEL=warn`
+unless noted, and `TEST_RUN=$(uuidgen)` per invocation so `$test_run` scopes panels 3–6.
+
+| # | Scenario | Command | Check after |
+|---|---|---|---|
+| 1 | `breakpoint` | `TIER=A TEST_RUN=$(uuidgen) k6 run capacity-test.js` | `dropped_iterations` climb → note the knee rate |
+| 2 | `miss` (DB-bound ceiling) | `TIER=A SCENARIO=miss TEST_RUN=$(uuidgen) k6 run capacity-test.js` | Same — `dropped_iterations`; expect a much lower knee than #1 |
+| 3 | `steady` @ ~70% of knee | `TIER=A SCENARIO=steady STEADY_RATE=<0.7×knee> k6 run capacity-test.js` | `poolInUse`/`rss` panels 11/12 over the 15m window, no drift |
+| 4 | `cold_cache` | `TIER=A SCENARIO=cold_cache SCRAPER_SECRET=$SCRAPER_SECRET k6 run capacity-test.js` | `{module="cache"}\|json\|log_level=~"warn\|error"` — lock-timeout warns should taper off fast |
+| 5 | `stampede` (run `LOG_LEVEL=debug` for this one only) | `LOG_LEVEL=debug docker compose up -d app` then `TIER=A SCENARIO=stampede SCRAPER_SECRET=$SCRAPER_SECRET k6 run capacity-test.js` | `sum(count_over_time({container="kickmap",module="repo:product"}\|json\|filters="vendor,onSaleOnly"[$__interval]))` narrowed to the burst's few-second window — **1 (or low single digits) = pass, ~200 = fail**. Repeat: re-run the same command again for burst 2, 3, ... (each `setup()` re-busts the cache — see script comment for why this isn't an internal loop). Revert `LOG_LEVEL` after. |
+| 6 | `soak` (long — run overnight/off-hours) | `TIER=A SCENARIO=soak SOAK_RATE=<below knee> SOAK_DURATION=60m k6 run capacity-test.js` | Panels 11/12 over the **full** window: flat `rss`/`heapUsed`/`poolInUse`/`eventLoopLag_mean` = pass |
+| 7 | `chaos-test.js` | `TIER=A TEST_RUN=$(uuidgen) k6 run chaos-test.js` — **read the console output at start**, it prints the exact wall-clock times to run `docker compose stop redis` / `docker compose start redis` | During: `status_500` stays ~0 (any 500 = bug), `status_429` stays ~0 (fail-open). After: `{module="redis"}` for `"Redis connected"` — if absent, `docker compose restart app` (see script header for why) |
+
+Notes:
+- `miss` and `stampede` don't need `SCRAPER_SECRET` unless noted — `stampede` requires it
+  (its `setup()` always busts the cache).
+- `soak`/`stampede`/`miss` are intentionally excluded from `SCENARIO=all` — always invoke by
+  name.
+- Mongo/Atlas chaos (iptables) is advanced/optional, not in this table — see `chaos-test.js`'s
+  header comment. It is destructive to the whole app until manually reverted; do not run it as
+  part of the default runbook above.
+
+---
+
 ## Known gaps — still open
 
 Nothing below has shipped. Ordered by diagnostic value per line of code.

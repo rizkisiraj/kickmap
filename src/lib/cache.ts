@@ -17,7 +17,33 @@ const inFlight = new Map<string, Promise<unknown>>();
 
 // Stale-while-revalidate: hold last-known values in memory so we can serve
 // them immediately when Redis expires, while one request revalidates.
+//
+// Bounded LRU (Map-based): Map iteration order is insertion order, so on
+// `get` we delete+re-insert the key to move it to the "most recently used"
+// end, and on `set` — once we're over MAX_STALE_MEMORY_ENTRIES — we evict
+// the first key from `.keys()`, which is the least-recently-used entry.
+// Without this, every distinct cache key (including every unique
+// `model=`/autocomplete search token) would add a permanent entry and never
+// get evicted, leaking memory for the lifetime of the process.
+const MAX_STALE_MEMORY_ENTRIES = 500;
 const staleMemory = new Map<string, unknown>();
+
+function staleMemoryGet(key: string): unknown {
+  if (!staleMemory.has(key)) return undefined;
+  const value = staleMemory.get(key);
+  staleMemory.delete(key);
+  staleMemory.set(key, value);
+  return value;
+}
+
+function staleMemorySet(key: string, value: unknown): void {
+  if (staleMemory.has(key)) staleMemory.delete(key);
+  staleMemory.set(key, value);
+  if (staleMemory.size > MAX_STALE_MEMORY_ENTRIES) {
+    const oldestKey = staleMemory.keys().next().value;
+    if (oldestKey !== undefined) staleMemory.delete(oldestKey);
+  }
+}
 
 export const withCache = async <T>(
   key: string,
@@ -36,7 +62,7 @@ export const withCache = async <T>(
   }
 
   // 2. Redis expired — serve stale from memory immediately if available
-  const memoryStale = staleMemory.get(key);
+  const memoryStale = staleMemoryGet(key);
   if (memoryStale !== undefined) {
     log.debug({ key: getKeyPattern(key), stale: true }, 'Serving stale from memory');
     // Trigger background revalidation (fire-and-forget)
@@ -80,8 +106,12 @@ async function revalidate<T>(
     }
     // Lock held by another process but we have no inFlight promise.
     // Poll Redis briefly until the key appears (they'll set it soon).
-    for (let i = 0; i < 10; i++) {
-      await new Promise((r) => setTimeout(r, 100));
+    // Exponential backoff, capped at ~775ms worst case total (25+50+100+200+400ms)
+    // — well under the old fixed 1000ms (10x100ms) so a request never holds
+    // its resources for a full second waiting on another process's lock.
+    const backoffDelaysMs = [25, 50, 100, 200, 400];
+    for (const delay of backoffDelaysMs) {
+      await new Promise((r) => setTimeout(r, delay));
       try {
         const cached = await redis.get(key);
         if (cached !== null) {
@@ -97,7 +127,7 @@ async function revalidate<T>(
 
   const promise = fetchFn()
     .then((fresh) => {
-      staleMemory.set(key, fresh);
+      staleMemorySet(key, fresh);
       void redis.setex(key, ttlSeconds, JSON.stringify(fresh));
       return fresh;
     })

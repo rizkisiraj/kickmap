@@ -8,6 +8,11 @@ interface CursorPaginationParams {
   limit: number;
 }
 
+// Page sizes the app itself requests: 20 (deals), 24 (grids/size-finder),
+// and 500 (the clamp ceiling that /compare's limit=10000 lands on). Any
+// other value bypasses the cache — see the comment in getProducts.
+const CACHEABLE_LIMITS = new Set([20, 24, 500]);
+
 export function buildCacheKey(filters: ProductFilters): string {
   const entries = Object.entries(filters)
     .filter(([, v]) => v !== undefined && v !== null)
@@ -46,27 +51,39 @@ export const productService = {
     filters: ProductFilters,
     pagination: CursorPaginationParams = { limit: 24 },
   ): Promise<Result<PaginatedResponse<Product>>> {
-    const cacheKey = buildCacheKey(filters);
+    const { cursor, limit } = pagination;
+    const afterCode = decodeCursor(cursor);
+
+    // The repository now returns only the requested page (via a $facet
+    // pipeline), not the full result set. That means the cache key MUST
+    // encode pagination params (cursor + limit) — otherwise every page
+    // would collide on the same filter-only key and every request would
+    // be served page 1's cached payload regardless of which page was
+    // actually requested. We derive the base key from filters (unchanged
+    // behaviour/naming for the unfiltered/common cases) and append the
+    // pagination params as an extra segment.
+    const baseCacheKey = buildCacheKey(filters);
+    const cacheKey = `${baseCacheKey}|cursor:${cursor ?? ''}|limit:${limit}`;
     const ttl = (filters.model !== undefined || filters.q !== undefined) ? CACHE_TTL.AUTOCOMPLETE : CACHE_TTL.PRODUCTS;
 
-    // Skip cache for free-text q queries to prevent Redis key explosion
-    // Text index (Phase 2) makes these fast enough without caching
-    const allProducts = filters.q !== undefined
-      ? await productRepository.findMany(filters)
-      : await withCache(cacheKey, ttl, () => productRepository.findMany(filters));
+    // Cache bypass rules — both exist to stop Redis key explosion:
+    //  - `q` is free-text, so its key space is unbounded by construction.
+    //  - `limit` is caller-controlled (the route clamps it to 500 but
+    //    otherwise passes it through). Since it is now part of the cache
+    //    key, an arbitrary limit would let one client mint up to 500
+    //    distinct entries per filter combination, each pinned for
+    //    CACHE_TTL.PRODUCTS (6h). Only the page sizes the UI actually
+    //    requests are cacheable; anything else goes straight to Mongo,
+    //    which is cheap now that the pipeline pages server-side.
+    const shouldCache = filters.q === undefined && CACHEABLE_LIMITS.has(limit);
 
-    const { cursor, limit } = pagination;
-    const total = allProducts.length;
+    const page = shouldCache
+      ? await withCache(cacheKey, ttl, () => productRepository.findPage(filters, { afterProductCode: afterCode, limit }))
+      : await productRepository.findPage(filters, { afterProductCode: afterCode, limit });
 
-    const afterCode = decodeCursor(cursor);
-    let startIndex = 0;
-    if (afterCode !== null) {
-      const pos = allProducts.findIndex((p) => p.productCode === afterCode);
-      startIndex = pos === -1 ? 0 : pos + 1;
-    }
-
-    const data = allProducts.slice(startIndex, startIndex + limit);
-    const hasMore = startIndex + limit < total;
+    const { total } = page;
+    const hasMore = page.data.length > limit;
+    const data = hasMore ? page.data.slice(0, limit) : page.data;
     const nextCursor = hasMore && data.length > 0
       ? encodeCursor(data[data.length - 1]!.productCode)
       : null;

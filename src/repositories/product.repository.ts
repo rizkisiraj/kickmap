@@ -194,6 +194,214 @@ export const productRepository = {
     return results;
   },
 
+  /**
+   * Paginated variant of findMany. Pushes cursor pagination into MongoDB via
+   * a $facet stage instead of fetching the full result set and slicing it in
+   * application memory. Only `limit + 1` rows are ever transferred over the
+   * wire (the extra row is used to derive `hasMore` without a second count
+   * query against the paged data).
+   *
+   * `afterProductCode` is the already-decoded cursor value (the service
+   * layer owns cursor encoding/decoding); passing `null` returns the first
+   * page.
+   */
+  async findPage(
+    filters: ProductFilters,
+    pagination: { afterProductCode: string | null; limit: number },
+  ): Promise<{ data: Product[]; total: number }> {
+    await connectDB();
+
+    const startTime = Date.now();
+
+    // Build stock filter stage
+    const stockMatch: Record<string, unknown> = {};
+    if (filters.region !== undefined) stockMatch['region'] = filters.region;
+    if (filters.inStock !== undefined) stockMatch['inStock'] = filters.inStock;
+    if (filters.onSaleOnly === true) stockMatch['isOnSale'] = true;
+    if (filters.size !== undefined) stockMatch['sizesAvailable'] = filters.size;
+
+    // Build non-search product filter stage (vendor, gender, model)
+    const productMatch: Record<string, unknown> = {};
+    if (filters.vendor !== undefined) {
+      productMatch['vendor'] = { $regex: new RegExp(filters.vendor, 'i') };
+    }
+    if (filters.gender !== undefined) {
+      productMatch['gender'] = { $regex: new RegExp(filters.gender, 'i') };
+    }
+    if (filters.model !== undefined) {
+      productMatch['$or'] = [
+        { title: { $regex: new RegExp(filters.model, 'i') } },
+        { colorway: { $regex: new RegExp(filters.model, 'i') } },
+      ];
+    }
+
+    interface AggResult {
+      productCode: string;
+      title: string;
+      vendor: string;
+      imageUrl: string;
+      gender: string;
+      productType: string;
+      colorway?: string;
+      stock: {
+        region: string;
+        sizesAvailable: string[];
+        sizesTotal: string[];
+        inStock: boolean;
+        totalStock: number;
+        price: number;
+        originalPrice?: number | null;
+        isOnSale: boolean;
+        currency: string;
+        scrapedAt: Date | string;
+      }[];
+    }
+
+    interface FacetResult {
+      data: AggResult[];
+      total: { count: number }[];
+    }
+
+    function buildBasePipeline(firstMatch: Record<string, unknown>): PipelineStage.FacetPipelineStage[] {
+      return [
+        { $match: firstMatch },
+        ...(Object.keys(productMatch).length > 0 ? [{ $match: productMatch }] : []),
+        {
+          $lookup: {
+            from: 'jdregionstocks',
+            localField: 'productCode',
+            foreignField: 'productCode',
+            as: 'stock',
+          },
+        },
+        ...(Object.keys(stockMatch).length > 0
+          ? [{ $match: { stock: { $elemMatch: stockMatch } } }]
+          : []),
+        ...(Object.keys(stockMatch).length > 0
+          ? [{
+              $set: {
+                stock: {
+                  $filter: {
+                    input: '$stock',
+                    as: 's',
+                    cond: {
+                      $and: Object.entries(stockMatch).map(([k, v]) =>
+                        k === 'sizesTotal' || k === 'sizesAvailable'
+                          ? { $in: [v, `$$s.${k}`] }
+                          : { $eq: [`$$s.${k}`, v] }
+                      ),
+                    },
+                  },
+                },
+              },
+            }]
+          : []),
+        { $match: { 'stock.0': { $exists: true } } },
+        ...(filters.multiRegion === true
+          ? [{ $match: { $expr: { $gte: [{ $size: { $setUnion: '$stock.region' } }, 2] } } }]
+          : []),
+        { $sort: { productCode: 1 } },
+      ];
+    }
+
+    // Cursor is applied AFTER the sort stage so `$gt` walks the sorted set,
+    // matching the pre-existing in-memory semantics (slice starting right
+    // after the matching productCode).
+    const cursorStage: PipelineStage.FacetPipelineStage[] = pagination.afterProductCode !== null
+      ? [{ $match: { productCode: { $gt: pagination.afterProductCode } } }]
+      : [];
+
+    function buildPagedPipeline(firstMatch: Record<string, unknown>): PipelineStage[] {
+      return [
+        ...buildBasePipeline(firstMatch),
+        {
+          $facet: {
+            data: [...cursorStage, { $limit: pagination.limit + 1 }],
+            total: [{ $count: 'count' }],
+          },
+        },
+      ];
+    }
+
+    function mapResults(results: AggResult[]): Product[] {
+      return results.map((p) => {
+        const product: Product = {
+          productCode: p.productCode,
+          title: p.title,
+          vendor: p.vendor,
+          imageUrl: p.imageUrl,
+          gender: p.gender,
+          productType: p.productType,
+          stock: p.stock.map(mapStockDoc),
+        };
+        if (p.colorway !== undefined && p.colorway !== null) {
+          product.colorway = p.colorway;
+        }
+        return product;
+      });
+    }
+
+    function unwrapFacet(facetResults: FacetResult[]): { data: Product[]; total: number } {
+      const facet = facetResults[0];
+      if (!facet) return { data: [], total: 0 };
+      return {
+        data: mapResults(facet.data),
+        total: facet.total[0]?.count ?? 0,
+      };
+    }
+
+    let result: { data: Product[]; total: number } = { data: [], total: 0 };
+    let searchPath = 'standard';
+
+    // Hybrid search: $text first (indexed), $regex fallback (catches partials)
+    if (filters.q !== undefined && filters.q.trim().length >= 2) {
+      const trimmedQ = filters.q.trim();
+
+      // Stage 1: $text search (uses text index)
+      const textPipeline = buildPagedPipeline({ $text: { $search: trimmedQ } });
+      const textFacet = await JDProductModel.aggregate<FacetResult>(textPipeline);
+      const textUnwrapped = unwrapFacet(textFacet);
+
+      if (textUnwrapped.total > 0) {
+        result = textUnwrapped;
+        searchPath = 'text';
+      } else {
+        // Stage 2: $regex fallback for partial matches
+        const qRegex = { $regex: new RegExp(trimmedQ, 'i') };
+        const regexPipeline = buildPagedPipeline({
+          $or: [{ title: qRegex }, { vendor: qRegex }, { colorway: qRegex }],
+        });
+        const regexFacet = await JDProductModel.aggregate<FacetResult>(regexPipeline);
+        result = unwrapFacet(regexFacet);
+        searchPath = 'regex';
+      }
+    } else {
+      // No search query — standard pipeline
+      const firstMatch = Object.keys(productMatch).length > 0 ? productMatch : {};
+      const pipeline = buildPagedPipeline(firstMatch);
+      const facetResults = await JDProductModel.aggregate<FacetResult>(pipeline);
+      result = unwrapFacet(facetResults);
+    }
+
+    const duration = Date.now() - startTime;
+    const filterSummary = Object.entries(filters)
+      .filter(([, v]) => v !== undefined)
+      .map(([k]) => k)
+      .join(',');
+
+    if (duration > 100) {
+      log.warn({ duration, resultCount: result.data.length, searchPath, filters: filterSummary }, 'Slow product page query');
+    } else {
+      log.debug({ duration, resultCount: result.data.length, searchPath, filters: filterSummary }, 'Product page query completed');
+    }
+
+    if (result.data.length === 0 && filterSummary) {
+      log.debug({ filters: filterSummary, searchPath }, 'Zero results for product page query');
+    }
+
+    return result;
+  },
+
   async findByCode(code: string): Promise<Product | null> {
     await connectDB();
 
