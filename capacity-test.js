@@ -510,16 +510,26 @@ export const options = {
     // a safety net, not a pass/fail gate for "does the app perform well": a
     // handful of drops right at the knee is the expected finding, not a
     // failure. abortOnFail exists to stop wasting the rest of the ramp once
-    // saturation is severe and unambiguous (>200 dropped iterations) — by
-    // then the ceiling is already established and continuing to climb
-    // toward 1500 req/s just burns generator resources for no new signal.
+    // saturation is severe and unambiguous — by then the ceiling is already
+    // established and continuing to climb toward 1500 req/s just burns
+    // generator resources for no new signal.
+    //
+    // This MUST be a rate, not a cumulative count. `count<200` measures how
+    // long the test has been running, not how saturated the app is: drops
+    // accumulate and never decay, so any sufficiently long run trips it
+    // regardless of health. Two separate `miss` runs aborted at 3m36s with
+    // 212 and 201 drops — the same point on the stopwatch, not the same
+    // point on the load curve, and both well before the knee. A rate
+    // threshold only fires while drops are actively happening, which is the
+    // actual saturation signal.
+    //
     // Applies globally regardless of which SCENARIO is selected (only one
     // scenario runs per invocation, except 'all'), which is what keeps this
     // guard live on `miss` (a ceiling-finding scenario, same as
     // `breakpoint`) without having to duplicate it per-scenario. Never
     // remove this — ceiling-finding scenarios must abort at the knee, not
     // push toward OOM.
-    dropped_iterations: [{ threshold: 'count<200', abortOnFail: true }],
+    dropped_iterations: [{ threshold: 'rate<5', abortOnFail: true }],
 
     // Deliberately NOT setting a tight p95 threshold — see header comment.
     // p95 blowing past 200ms as the offered rate approaches the knee is the
