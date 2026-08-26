@@ -139,7 +139,7 @@ export default function SizeFinderPage() {
           </div>
           <div className="size-finder-grid">
             {items.map((product) => {
-              const stockByRegion = (['MY', 'ID', 'SG'] as Region[]).flatMap((r) => {
+              const stockByRegion = (['MY', 'ID', 'SG', 'TH'] as Region[]).flatMap((r) => {
                 const s = product.stock.find((st) => st.region === r && st.sizesAvailable.includes(selectedSize));
                 return s ? [{ region: r, stock: s }] : [];
               });
