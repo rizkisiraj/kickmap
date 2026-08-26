@@ -14,10 +14,13 @@ export const redis: Redis =
     maxRetriesPerRequest: 3,
     connectTimeout: 5000,
     commandTimeout: 3000,
-    retryStrategy: (times: number) => {
-      if (times > 3) return null;
-      return Math.min(times * 200, 1000);
-    },
+    // Unbounded retry with capped backoff. Returning `null` (the previous
+    // behaviour after 3 attempts) tells ioredis to STOP reconnecting
+    // forever — a single Redis blip would then permanently disable the
+    // cache until the container restarts, with every request falling
+    // through to MongoDB. Keep retrying indefinitely, capping the delay
+    // at 5s so reconnect attempts don't hammer Redis during an outage.
+    retryStrategy: (times: number) => Math.min(times * 200, 5000),
   });
 
 redis.on('connect', () => log.info('Redis connected'));
