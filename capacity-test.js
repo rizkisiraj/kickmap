@@ -204,8 +204,17 @@ function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 // rate limiter from throttling the offered rate before it's had a chance
 // to find the app's real ceiling (100-request/60s windows would otherwise
 // cap a single "IP" well below 1500 req/s).
+// One synthetic address per REQUEST, not per VU. The per-VU version was
+// wrong in a way that only shows up once the app is fast: arrival-rate
+// executors size the VU pool to `rate x response_time`, so at 50 req/s with
+// 30ms responses k6 needs ~1.5 VUs — meaning one or two synthetic IPs
+// absorb the entire offered rate and blow straight through the app's
+// 100-request/60s per-IP limit. The faster the app got, the harder the test
+// throttled itself: an 8m miss run came back 44% 429s. ~65k addresses keeps
+// every bucket far below the limit regardless of how few VUs are live.
 function vuIp() {
-  return `10.${Math.floor(__VU / 254)}.${(__VU % 254) + 1}.1`;
+  const n = Math.floor(Math.random() * 65536);
+  return `10.${n >> 8}.${n & 0xff}.${Math.floor(Math.random() * 254) + 1}`;
 }
 
 function tierHeaders() {
@@ -226,7 +235,15 @@ const statusOther = new Rate('status_other');
 function get(url, tags) {
   const res = http.get(url, {
     headers: { ...tierHeaders(), 'X-Test-Run': TEST_RUN },
-    tags,
+    // k6 tags every request with its full URL by default. Several scenarios
+    // deliberately put a unique nonce in the query string, so each request
+    // would mint its own metric time series — an 8m miss run produced
+    // 400,022 of them, which costs real memory and CPU on a generator that
+    // is already sharing cores with the app. `name` overrides the URL in
+    // metrics, collapsing each endpoint back to a single series. The
+    // `endpoint` tag every call site already passes is exactly the right
+    // grouping key.
+    tags: { ...tags, name: (tags && tags.endpoint) || url },
     timeout: '30s',
   });
   status2xx.add(res.status >= 200 && res.status < 300);
